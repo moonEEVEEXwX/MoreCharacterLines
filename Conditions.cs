@@ -100,25 +100,8 @@ internal static class RestSiteConditions
             // 3) 血量低
             if (PlayerContext.IsLowHealth(player)) conditions.Add(Conditions.LowHp);
 
-            // 4) 遗物氛围台词（各自小概率）
-            //    这里用「类型」判断而不是遗物 ID 字符串：类名写错会直接编译不过，
-            //    不会出现“静默不生效”的情况。
-            if (PlayerContext.FindRelic<Shovel>(player) is not null) conditions.Add(Conditions.Shovel);
-            if (PlayerContext.FindRelic<MeatCleaver>(player) is not null) conditions.Add(Conditions.Cleaver);
-            if (PlayerContext.FindRelic<MiniatureTent>(player) is not null) conditions.Add(Conditions.Tent);
-            if (PlayerContext.FindRelic<DreamCatcher>(player) is not null) conditions.Add(Conditions.DreamCatcher);
-            if (PlayerContext.FindRelic<TinyMailbox>(player) is not null) conditions.Add(Conditions.Mailbox);
-            if (PlayerContext.FindRelic<RegalPillow>(player) is not null) conditions.Add(Conditions.Pillow);
-            if (PlayerContext.FindRelic<PaelsGrowth>(player) is not null) conditions.Add(Conditions.PaelsGrowth);
-            if (PlayerContext.FindRelic<StoneHumidifier>(player) is not null) conditions.Add(Conditions.Humidifier);
-
-            // 真假茶具：有真货就不说假货那几句
-            bool hasRealTeaSet = PlayerContext.FindRelic<VenerableTeaSet>(player) is not null;
-            if (hasRealTeaSet) conditions.Add(Conditions.TeaSet);
-            if (!hasRealTeaSet && PlayerContext.FindRelic<FakeVenerableTeaSet>(player) is not null)
-            {
-                conditions.Add(Conditions.FakeTeaSet);
-            }
+            // 4) 遗物氛围台词（各自小概率）—— 纯逻辑，见 FlavorConditions
+            conditions.AddRange(FlavorConditions(OwnedRelicTypes(player)));
 
             // 5) 壶铃还没练满
             if (girya is not null && girya.TimesLifted < GiryaMaxLifts())
@@ -132,6 +115,60 @@ internal static class RestSiteConditions
         }
 
         return conditions.ToArray();
+    }
+
+    /// <summary>
+    /// 纯逻辑：根据「身上有哪些遗物类型」决定要说哪些氛围台词。
+    /// 用类型而不是遗物 ID 字符串 —— 写错类名会直接编译不过，不会静默失效。
+    /// 抽成纯函数是为了能在预检里直接测（尤其是真假茶具的互斥）。
+    /// </summary>
+    internal static List<string> FlavorConditions(IReadOnlyCollection<Type> ownedRelicTypes)
+    {
+        var conditions = new List<string>();
+
+        bool Has<T>() where T : RelicModel
+        {
+            foreach (Type type in ownedRelicTypes)
+            {
+                if (typeof(T).IsAssignableFrom(type)) return true;
+            }
+            return false;
+        }
+
+        if (Has<Shovel>()) conditions.Add(Conditions.Shovel);
+        if (Has<MeatCleaver>()) conditions.Add(Conditions.Cleaver);
+        if (Has<MiniatureTent>()) conditions.Add(Conditions.Tent);
+        if (Has<DreamCatcher>()) conditions.Add(Conditions.DreamCatcher);
+        if (Has<TinyMailbox>()) conditions.Add(Conditions.Mailbox);
+        if (Has<RegalPillow>()) conditions.Add(Conditions.Pillow);
+        if (Has<PaelsGrowth>()) conditions.Add(Conditions.PaelsGrowth);
+        if (Has<StoneHumidifier>()) conditions.Add(Conditions.Humidifier);
+
+        // 真假茶具：有真货时只说真货那几句，假货台词不出现
+        bool hasRealTeaSet = Has<VenerableTeaSet>();
+        if (hasRealTeaSet) conditions.Add(Conditions.TeaSet);
+        if (!hasRealTeaSet && Has<FakeVenerableTeaSet>()) conditions.Add(Conditions.FakeTeaSet);
+
+        return conditions;
+    }
+
+    /// <summary>收集玩家身上遗物的具体类型。</summary>
+    private static Type[] OwnedRelicTypes(Player? player)
+    {
+        try
+        {
+            IReadOnlyList<RelicModel>? relics = player?.Relics;
+            if (relics is null) return Array.Empty<Type>();
+
+            var types = new List<Type>(relics.Count);
+            foreach (RelicModel relic in relics) types.Add(relic.GetType());
+            return types.ToArray();
+        }
+        catch (Exception e)
+        {
+            Log.Warn("[CharacterLines] 读取遗物列表失败：" + e.Message);
+            return Array.Empty<Type>();
+        }
     }
 
     /// <summary>Girya.maxLifts 是编译期常量，用反射读一次避免版本改动后失配。</summary>
