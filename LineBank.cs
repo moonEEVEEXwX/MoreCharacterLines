@@ -17,23 +17,32 @@ internal static class Scenes
     internal const string Ping = "ping";
 }
 
-/// <summary>单个场景：角色池 + 条件池。</summary>
+/// <summary>单个场景：角色 → 各个池子的台词。</summary>
 internal sealed class LineScene
 {
-    /// <summary>角色 ID / "DEFAULT" → 台词。</summary>
-    internal readonly Dictionary<string, List<string>> Pools = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>角色 ID / "DEFAULT" → （池名 → 台词）。池名如 normal / low_hp。</summary>
+    internal readonly Dictionary<string, Dictionary<string, List<string>>> Characters =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>条件名（如 low_hp）→ 条件池。</summary>
-    internal readonly Dictionary<string, SceneCondition> Conditions = new(StringComparer.OrdinalIgnoreCase);
-}
+    /// <summary>场景级条件概率覆盖（可选，优先级高于文件级 _conditionChance）。</summary>
+    internal readonly Dictionary<string, double> ConditionChances = new(StringComparer.OrdinalIgnoreCase);
 
-/// <summary>条件池：满足条件时优先从这里抽。</summary>
-internal sealed class SceneCondition
-{
-    /// <summary>满足条件时使用这个池的概率（_chance），默认 1（一定用）。</summary>
-    internal double Chance = 1.0;
+    internal List<string>? Pool(string? characterId, string pool)
+    {
+        if (string.IsNullOrWhiteSpace(characterId)) return null;
+        if (!Characters.TryGetValue(characterId, out Dictionary<string, List<string>>? pools)) return null;
+        return pools.TryGetValue(pool, out List<string>? lines) ? lines : null;
+    }
 
-    internal readonly Dictionary<string, List<string>> Pools = new(StringComparer.OrdinalIgnoreCase);
+    internal List<string>? DefaultPool(string pool, string[] defaultKeys)
+    {
+        foreach (string key in defaultKeys)
+        {
+            List<string>? lines = Pool(key, pool);
+            if (lines is not null) return lines;
+        }
+        return null;
+    }
 }
 
 /// <summary>一整份台词文件。</summary>
@@ -41,6 +50,9 @@ internal sealed class LineFile
 {
     /// <summary>有专属台词的角色抽到 DEFAULT 通用池的概率（_defaultChance）。</summary>
     internal double DefaultChance = LineBank.DefaultChanceFallback;
+
+    /// <summary>文件级条件概率（_conditionChance.&lt;条件名&gt; = 概率）。</summary>
+    internal readonly Dictionary<string, double> ConditionChances = new(StringComparer.OrdinalIgnoreCase);
 
     internal readonly Dictionary<string, LineScene> Scenes = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -54,26 +66,38 @@ internal sealed class LineFile
 ///   3. res://CharacterLines/lines.json      —— mod 的 PCK 里自带的那份
 ///   4. 都没有就返回 null（调用方保持游戏原样）
 ///
-/// JSON 结构：
+/// JSON 结构（条件直接挂在角色下面）：
 ///   {
 ///     "_defaultChance": 0.1,
+///     "_conditionChance": { "low_hp": 0.8 },
 ///     "rest_site": {
-///       "IRONCLAD": ["...", "..."],
-///       "DEFAULT":  ["..."],
-///       "_conditions": {
-///         "low_hp": { "_chance": 0.8, "IRONCLAD": ["..."], "DEFAULT": ["..."] }
-///       }
-///     }
+///       "IRONCLAD": {
+///         "normal": ["平时说的话...", "..."],
+///         "low_hp": ["血量低时说的话...", "..."]
+///       },
+///       "DEFAULT": {
+///         "normal": ["...", "..."],
+///         "low_hp": ["..."]
+///       },
+///       "SILENT": ["只写数组也行 —— 等于只有 normal 池"]
+///     },
+///     "ping": { "IRONCLAD": ["快点。"] }
 ///   }
+///
+/// 还兼容旧写法：场景里的 "_conditions": { "low_hp": { "_chance": 0.8, "IRONCLAD": [...] } }。
 /// </summary>
 internal static class LineBank
 {
     internal const string DefaultKey = "DEFAULT";
 
-    /// <summary>有专属台词的角色抽到 DEFAULT 通用池的默认概率（可在台词文件里用 _defaultChance 覆盖）。</summary>
+    /// <summary>平时的池子名。也认 default / 正常 / 平时 这些写法。</summary>
+    internal const string NormalPool = "normal";
+
+    /// <summary>有专属台词的角色抽到 DEFAULT 通用池的默认概率（可用 _defaultChance 覆盖）。</summary>
     internal const double DefaultChanceFallback = 0.1;
 
     private static readonly string[] DefaultKeys = { "DEFAULT", "default", "通用", "默认" };
+    private static readonly string[] NormalAliases = { "normal", "default", "正常", "平时" };
 
     private const string BuiltInPath = "res://CharacterLines/lines.json";
     private const string UserDirPath = "user://CharacterLines";
@@ -102,33 +126,42 @@ internal static class LineBank
             foreach (string condition in conditions)
             {
                 if (string.IsNullOrWhiteSpace(condition)) continue;
-                if (!lineScene.Conditions.TryGetValue(condition, out SceneCondition? pool)) continue;
-                if (pool.Chance < 1.0 && Random.Shared.NextDouble() >= pool.Chance) continue;
 
-                string? conditioned = Draw(pool.Pools, characterId, file.DefaultChance);
-                if (conditioned is not null) return conditioned; // 条件池里没写这个角色 → 继续走常规池
+                double chance = ResolveConditionChance(lineScene, file, condition);
+                if (chance <= 0.0) continue;
+                if (chance < 1.0 && Random.Shared.NextDouble() >= chance) continue;
+
+                string? conditioned = Draw(lineScene, characterId, condition, file.DefaultChance);
+                if (conditioned is not null) return conditioned; // 条件池里没写这个角色 → 继续找
             }
         }
 
-        // 2) 常规池
-        return Draw(lineScene.Pools, characterId, file.DefaultChance);
+        // 2) 平时的池子
+        return Draw(lineScene, characterId, NormalPool, file.DefaultChance);
     }
 
-    /// <summary>从一组池子里抽：优先该角色，其次 DEFAULT（并按概率混用）。</summary>
-    private static string? Draw(Dictionary<string, List<string>> pools, string? characterId, double defaultChance)
+    private static double ResolveConditionChance(LineScene scene, LineFile file, string condition)
     {
-        List<string>? characterLines = Find(pools, characterId);
-        List<string>? defaults = FindAny(pools, DefaultKeys);
+        if (scene.ConditionChances.TryGetValue(condition, out double sceneChance)) return sceneChance;
+        if (file.ConditionChances.TryGetValue(condition, out double fileChance)) return fileChance;
+        return 1.0;
+    }
+
+    /// <summary>从某个池子里抽：优先该角色，其次 DEFAULT（并按概率混用）。</summary>
+    private static string? Draw(LineScene scene, string? characterId, string pool, double defaultChance)
+    {
+        List<string>? characterLines = scene.Pool(characterId, pool);
+        List<string>? defaults = scene.DefaultPool(pool, DefaultKeys);
 
         bool useDefaults = characterLines is null || characterLines.Count == 0;
         if (!useDefaults && defaults is { Count: > 0 } && Random.Shared.NextDouble() < defaultChance)
             useDefaults = true;
 
-        List<string>? pool = useDefaults ? defaults : characterLines;
-        pool ??= characterLines ?? defaults;
-        if (pool is null || pool.Count == 0) return null;
+        List<string>? chosen = useDefaults ? defaults : characterLines;
+        chosen ??= characterLines ?? defaults;
+        if (chosen is null || chosen.Count == 0) return null;
 
-        return pool[Random.Shared.Next(pool.Count)];
+        return chosen[Random.Shared.Next(chosen.Count)];
     }
 
     // ── 可编辑文件 ──────────────────────────────────────────────────────────
@@ -295,7 +328,7 @@ internal static class LineBank
 
     /// <summary>
     /// 宽容解析：允许 BOM、// 注释、结尾多余逗号；
-    /// 台词写成字符串或字符串数组都行；_ 开头的键除 _defaultChance / _conditions / _chance 外都当注释。
+    /// 台词写成字符串或字符串数组都行；_ 开头的键当注释（除了 _defaultChance / _conditionChance / _conditions）。
     /// </summary>
     private static LineFile? Parse(string json)
     {
@@ -314,7 +347,9 @@ internal static class LineBank
             var file = new LineFile();
             foreach (JsonProperty property in doc.RootElement.EnumerateObject())
             {
-                if (string.Equals(property.Name, "_defaultChance", StringComparison.OrdinalIgnoreCase))
+                string key = property.Name;
+
+                if (string.Equals(key, "_defaultChance", StringComparison.OrdinalIgnoreCase))
                 {
                     if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDouble(out double chance))
                     {
@@ -323,12 +358,17 @@ internal static class LineBank
                     continue;
                 }
 
-                // 其它 _ 开头的键当注释
-                if (property.Name.StartsWith("_", StringComparison.Ordinal)) continue;
+                if (string.Equals(key, "_conditionChance", StringComparison.OrdinalIgnoreCase))
+                {
+                    ParseChanceMap(property.Value, file.ConditionChances);
+                    continue;
+                }
+
+                if (key.StartsWith("_", StringComparison.Ordinal)) continue;
                 if (property.Value.ValueKind != JsonValueKind.Object) continue;
 
                 LineScene scene = ParseScene(property.Value);
-                if (scene.Pools.Count > 0 || scene.Conditions.Count > 0) file.Scenes[property.Name] = scene;
+                if (scene.Characters.Count > 0) file.Scenes[key] = scene;
             }
 
             return file;
@@ -343,49 +383,112 @@ internal static class LineBank
     private static LineScene ParseScene(JsonElement sceneElement)
     {
         var scene = new LineScene();
+
         foreach (JsonProperty property in sceneElement.EnumerateObject())
         {
-            if (string.Equals(property.Name, "_conditions", StringComparison.OrdinalIgnoreCase))
+            string key = property.Name;
+
+            // 场景级条件概率（可选）
+            if (string.Equals(key, "_conditionChance", StringComparison.OrdinalIgnoreCase))
             {
-                if (property.Value.ValueKind != JsonValueKind.Object) continue;
-                foreach (JsonProperty conditionProperty in property.Value.EnumerateObject())
-                {
-                    if (conditionProperty.Value.ValueKind != JsonValueKind.Object) continue;
-                    scene.Conditions[conditionProperty.Name] = ParseCondition(conditionProperty.Value);
-                }
+                ParseChanceMap(property.Value, scene.ConditionChances);
                 continue;
             }
 
-            if (property.Name.StartsWith("_", StringComparison.Ordinal)) continue;
+            // 旧写法兼容：_conditions: { low_hp: { _chance, IRONCLAD: [...], DEFAULT: [...] } }
+            if (string.Equals(key, "_conditions", StringComparison.OrdinalIgnoreCase))
+            {
+                ParseLegacyConditions(property.Value, scene);
+                continue;
+            }
 
-            List<string>? lines = ParseLines(property.Value);
-            if (lines is { Count: > 0 }) scene.Pools[property.Name] = lines;
+            if (key.StartsWith("_", StringComparison.Ordinal)) continue;
+
+            JsonElement value = property.Value;
+
+            // 形式一：["...", "..."] 或 "..."  —— 只有 normal 池
+            if (value.ValueKind is JsonValueKind.Array or JsonValueKind.String)
+            {
+                List<string>? lines = ParseLines(value);
+                if (lines is { Count: > 0 }) SetPool(scene, key, NormalPool, lines);
+                continue;
+            }
+
+            // 形式二：{ "normal": [...], "low_hp": [...] }  —— 条件直接挂在角色下面
+            if (value.ValueKind == JsonValueKind.Object)
+            {
+                foreach (JsonProperty poolProperty in value.EnumerateObject())
+                {
+                    if (poolProperty.Name.StartsWith("_", StringComparison.Ordinal)) continue;
+                    List<string>? lines = ParseLines(poolProperty.Value);
+                    if (lines is { Count: > 0 }) SetPool(scene, key, NormalizePoolName(poolProperty.Name), lines);
+                }
+            }
         }
 
         return scene;
     }
 
-    private static SceneCondition ParseCondition(JsonElement conditionElement)
+    private static void ParseLegacyConditions(JsonElement element, LineScene scene)
     {
-        var condition = new SceneCondition();
-        foreach (JsonProperty property in conditionElement.EnumerateObject())
+        if (element.ValueKind != JsonValueKind.Object) return;
+
+        foreach (JsonProperty conditionProperty in element.EnumerateObject())
         {
-            if (string.Equals(property.Name, "_chance", StringComparison.OrdinalIgnoreCase))
+            if (conditionProperty.Value.ValueKind != JsonValueKind.Object) continue;
+            string conditionName = conditionProperty.Name;
+
+            foreach (JsonProperty poolProperty in conditionProperty.Value.EnumerateObject())
             {
-                if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDouble(out double chance))
+                if (string.Equals(poolProperty.Name, "_chance", StringComparison.OrdinalIgnoreCase))
                 {
-                    condition.Chance = Math.Clamp(chance, 0.0, 1.0);
+                    if (poolProperty.Value.ValueKind == JsonValueKind.Number && poolProperty.Value.TryGetDouble(out double chance))
+                    {
+                        scene.ConditionChances[conditionName] = Math.Clamp(chance, 0.0, 1.0);
+                    }
+                    continue;
                 }
-                continue;
+
+                if (poolProperty.Name.StartsWith("_", StringComparison.Ordinal)) continue;
+
+                List<string>? lines = ParseLines(poolProperty.Value);
+                if (lines is { Count: > 0 }) SetPool(scene, poolProperty.Name, conditionName, lines);
             }
+        }
+    }
 
-            if (property.Name.StartsWith("_", StringComparison.Ordinal)) continue;
+    private static void ParseChanceMap(JsonElement element, Dictionary<string, double> target)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return;
 
-            List<string>? lines = ParseLines(property.Value);
-            if (lines is { Count: > 0 }) condition.Pools[property.Name] = lines;
+        foreach (JsonProperty property in element.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDouble(out double chance))
+            {
+                target[property.Name] = Math.Clamp(chance, 0.0, 1.0);
+            }
+        }
+    }
+
+    private static void SetPool(LineScene scene, string characterId, string pool, List<string> lines)
+    {
+        if (!scene.Characters.TryGetValue(characterId, out Dictionary<string, List<string>>? pools))
+        {
+            pools = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            scene.Characters[characterId] = pools;
         }
 
-        return condition;
+        pools[pool] = lines;
+    }
+
+    /// <summary>normal / default / 正常 / 平时 都算「平时的池子」。</summary>
+    private static string NormalizePoolName(string name)
+    {
+        foreach (string alias in NormalAliases)
+        {
+            if (string.Equals(name, alias, StringComparison.OrdinalIgnoreCase)) return NormalPool;
+        }
+        return name;
     }
 
     /// <summary>台词值：字符串数组，或单个字符串。</summary>
@@ -408,28 +511,6 @@ internal static class LineBank
         }
 
         return list.Count > 0 ? list : null;
-    }
-
-    // ── 小工具 ──────────────────────────────────────────────────────────────
-
-    private static List<string>? Find(Dictionary<string, List<string>> pools, string? key)
-    {
-        if (string.IsNullOrWhiteSpace(key)) return null;
-        foreach (KeyValuePair<string, List<string>> pair in pools)
-        {
-            if (string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)) return pair.Value;
-        }
-        return null;
-    }
-
-    private static List<string>? FindAny(Dictionary<string, List<string>> pools, string[] keys)
-    {
-        foreach (string key in keys)
-        {
-            List<string>? found = Find(pools, key);
-            if (found is not null) return found;
-        }
-        return null;
     }
 
     private static void LogSourceOnce(string source)
