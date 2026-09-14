@@ -150,13 +150,29 @@ function Install-Files([string]$dest) {
     Copy-Item (Join-Path $projectDir "mod_manifest.json") (Join-Path $dest "$modId.json") -Force
 
     # lines.json：随包附带的“可就地修改”台词文件。
-    # 已存在就不覆盖，避免吞掉别人已经改好的台词。
+    # 已存在就不覆盖（避免吞掉别人改好的台词）；若老文件没有 UTF-8 BOM 则补一个，
+    # 这样记事本 / PowerShell 这类 Windows 工具打开中文不会乱码。
     $linesDest = Join-Path $dest "lines.json"
     if (-not (Test-Path $linesDest)) {
-        Copy-Item (Join-Path $projectDir "assets\$modId\rest_site_prompts.json") $linesDest -Force
+        $text = [System.IO.File]::ReadAllText((Join-Path $projectDir "assets\$modId\rest_site_prompts.json"), (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($linesDest, $text, (New-Object System.Text.UTF8Encoding($true)))
         Write-Host "已放入可编辑台词文件：$linesDest"
     } else {
-        Write-Host "保留已有的台词文件（不覆盖）：$linesDest"
+        $bytes = [System.IO.File]::ReadAllBytes($linesDest)
+        $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+        if ($hasBom) {
+            Write-Host "保留已有的台词文件（不覆盖）：$linesDest"
+        } else {
+            # 只有确认是合法 UTF-8 才动它，避免把 GBK 之类的文件改坏
+            try {
+                $strict = New-Object System.Text.UTF8Encoding($false, $true)
+                $text = $strict.GetString($bytes)
+                [System.IO.File]::WriteAllText($linesDest, $text, (New-Object System.Text.UTF8Encoding($true)))
+                Write-Host "已保留原有台词内容，并补上 UTF-8 BOM：$linesDest" -ForegroundColor Yellow
+            } catch {
+                Write-Host "保留已有的台词文件（不是 UTF-8，未改动）：$linesDest" -ForegroundColor Yellow
+            }
+        }
     }
 
     # 说明文档也一起放进去，方便别人打开 mod 文件夹就知道怎么改

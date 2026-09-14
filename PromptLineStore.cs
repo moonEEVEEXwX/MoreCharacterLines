@@ -213,15 +213,17 @@ internal static class PromptLineStore
     {
         try
         {
+            // 带 UTF-8 BOM 写：记事本 / PowerShell 等 Windows 工具能正确识别中文；
+            // 读取端（解析前）会把 BOM 去掉。
             if (!IsGodotPath(path))
             {
-                System.IO.File.WriteAllText(path, text); // 默认 UTF-8（无 BOM）
+                System.IO.File.WriteAllText(path, text, new System.Text.UTF8Encoding(true));
                 return true;
             }
 
             using Godot.FileAccess? file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Write);
             if (file is null) return false;
-            file.StoreString(text);
+            file.StoreString("\uFEFF" + text);
             return true;
         }
         catch
@@ -230,11 +232,14 @@ internal static class PromptLineStore
         }
     }
 
-    /// <summary>宽容解析：允许 // 注释和结尾多余逗号；值写成字符串或字符串数组都行。</summary>
+    /// <summary>宽容解析：允许 BOM、// 注释和结尾多余逗号；值写成字符串或字符串数组都行。</summary>
     private static Dictionary<string, List<string>>? Parse(string json)
     {
         try
         {
+            // 有些编辑器（或 Godot 的 GetAsText）会把 BOM / 零宽字符留在开头，先去掉
+            json = json.TrimStart('\uFEFF', '\u200B', '\u0000');
+
             using JsonDocument doc = JsonDocument.Parse(json, new JsonDocumentOptions
             {
                 CommentHandling = JsonCommentHandling.Skip,
