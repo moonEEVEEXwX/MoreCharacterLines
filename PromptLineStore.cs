@@ -39,10 +39,13 @@ internal static class PromptLineStore
     private const string EditableFileName = "lines.json";
 
     /// <summary>
-    /// 有专属台词的角色，仍有这个概率抽到 DEFAULT 里的通用台词（0.25 = 25%）。
-    /// 想让角色永远只说自己的台词就改成 0；想更多通用味就调大（最高 1）。
+    /// 有专属台词的角色抽到 DEFAULT 通用池的默认概率（0.1 = 10%）。
+    /// 台词文件里写 "_defaultChance": 0.05 可以就地覆盖这个值，不用重新编译。
     /// </summary>
-    private const double DefaultLineChance = 0.25;
+    private const double DefaultChanceFallback = 0.1;
+
+    /// <summary>实际使用的概率：来自台词文件的 _defaultChance，没有就用上面的默认值。</summary>
+    private static double _defaultChance = DefaultChanceFallback;
 
     private static bool _loggedSource;
     private static bool _modFolderResolved;
@@ -61,7 +64,7 @@ internal static class PromptLineStore
         List<string>? defaults = FindAny(lines, DefaultKeys);
 
         bool useDefaults = characterLines is null || characterLines.Count == 0;
-        if (!useDefaults && defaults is { Count: > 0 } && Random.Shared.NextDouble() < DefaultLineChance)
+        if (!useDefaults && defaults is { Count: > 0 } && Random.Shared.NextDouble() < _defaultChance)
             useDefaults = true;
 
         List<string>? pool = useDefaults ? defaults : characterLines;
@@ -249,9 +252,23 @@ internal static class PromptLineStore
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
 
             var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            // 每读一份文件就先把概率还原成默认值，文件里写了 _defaultChance 再覆盖
+            _defaultChance = DefaultChanceFallback;
+
             foreach (JsonProperty property in doc.RootElement.EnumerateObject())
             {
-                // 以 _ 开头的键当作注释性字段（比如 "_comment"），不当台词
+                // 概率配置项（就地调：0 = 永远只说自己的台词，1 = 永远说通用台词）
+                if (string.Equals(property.Name, "_defaultChance", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDouble(out double chance))
+                    {
+                        _defaultChance = Math.Clamp(chance, 0.0, 1.0);
+                    }
+                    continue;
+                }
+
+                // 其它以 _ 开头的键当作注释性字段（比如 "_comment"），不当台词
                 if (property.Name.StartsWith("_", StringComparison.Ordinal)) continue;
 
                 var list = new List<string>();
