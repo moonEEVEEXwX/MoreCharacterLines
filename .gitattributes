@@ -1,7 +1,12 @@
 # 统一换行，避免 Windows/Linux 协作时整文件 diff
 * text=auto eol=lf
 
-# Windows 脚本保持 CRLF（UTF-8 BOM 由文件内容保留，不受影响）
+# Windows 脚本保持 CRLF
+#
+# 注意：build.ps1 里有中文提示，必须存成 UTF-8 **with BOM**，
+# 否则 Windows PowerShell 5.1 会按 ANSI/GBK 解码导致语法错误。
+# （试过 git 的 working-tree-encoding=UTF-8-BOM，Git for Windows 不支持，会 fatal；
+#   所以改成用 fix-encoding.ps1 手动修，见 README。）
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 *.cmd text eol=crlf

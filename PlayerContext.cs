@@ -12,14 +12,11 @@ using MegaCrit.Sts2.Core.Runs;
 namespace CharacterLines;
 
 /// <summary>
-/// 游戏侧上下文：取当前玩家、判断条件（血量低等）。
+/// 游戏侧上下文：取当前玩家、读遗物、判断血量等。
 /// 各场景补丁共用这里的逻辑。
 /// </summary>
 internal static class PlayerContext
 {
-    /// <summary>条件名：血量低（和游戏低血边框动画同一个临界点）。</summary>
-    internal const string LowHp = "low_hp";
-
     /// <summary>拿不到角色自带判定时的兜底阈值：25%（游戏默认就是这个值）。</summary>
     private const double LowHpFallbackThreshold = 0.25;
 
@@ -55,17 +52,46 @@ internal static class PlayerContext
         }
     }
 
-    /// <summary>当前满足的条件（用于台词库的条件池）。</summary>
-    internal static string[] ConditionsFor(Player? player)
+    /// <summary>玩家身上有没有某个遗物（按遗物 ID，如 "SHOVEL"）。</summary>
+    internal static bool HasRelic(Player? player, string relicId)
     {
         try
         {
-            return IsLowHealth(player) ? new[] { LowHp } : Array.Empty<string>();
+            System.Collections.Generic.IReadOnlyList<RelicModel>? relics = player?.Relics;
+            if (relics is null) return false;
+
+            foreach (RelicModel relic in relics)
+            {
+                if (string.Equals(relic.Id.Entry, relicId, StringComparison.OrdinalIgnoreCase)) return true;
+            }
         }
-        catch
+        catch (Exception e)
         {
-            return Array.Empty<string>();
+            Log.Warn("[CharacterLines] 读遗物失败：" + e.Message);
         }
+
+        return false;
+    }
+
+    /// <summary>玩家身上有没有某个类型的遗物（要读它的层数时用这个）。</summary>
+    internal static T? FindRelic<T>(Player? player) where T : RelicModel
+    {
+        try
+        {
+            System.Collections.Generic.IReadOnlyList<RelicModel>? relics = player?.Relics;
+            if (relics is null) return null;
+
+            foreach (RelicModel relic in relics)
+            {
+                if (relic is T typed) return typed;
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Warn("[CharacterLines] 读遗物失败：" + e.Message);
+        }
+
+        return null;
     }
 
     /// <summary>

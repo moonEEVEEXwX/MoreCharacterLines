@@ -140,7 +140,13 @@ if ($LASTEXITCODE -ne 0) { throw "PCK 打包失败（退出码 $LASTEXITCODE）"
 # ── 4. 安装到 游戏目录\mods\<ModId>\ ────────────────────────────────────────
 Write-Step "安装"
 
-if (-not $OutDir) { $OutDir = Join-Path $GameDir "mods\$modId" }
+if (-not $OutDir) {
+    if ($SkipInstall) {
+        $OutDir = Join-Path $projectDir "dist\$modId"
+    } else {
+        $OutDir = Join-Path $GameDir "mods\$modId"
+    }
+}
 $installOk = $true
 
 # 组装要放进 mod 文件夹的东西：dll + pck + 清单 + 可直接编辑的台词文件 + 说明
@@ -195,7 +201,9 @@ try {
 }
 
 Write-Host ""
-if ($installOk) {
+if ($SkipInstall) {
+    Write-Host "只构建未安装，产物在：$OutDir" -ForegroundColor Green
+} elseif ($installOk) {
     Write-Host "构建完成，已安装到：$OutDir" -ForegroundColor Green
     Write-Host "改台词不用重新编译：编辑 $OutDir\lines.json（或 %AppData%\SlayTheSpire2\CharacterLines\lines.json），然后重进一次火堆。" -ForegroundColor Green
 } else {

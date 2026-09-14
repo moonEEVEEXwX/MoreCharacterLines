@@ -35,16 +35,25 @@ internal static class SceneRestSite
     {
         try
         {
-            Player? player = PlayerContext.FromRunState(GetRunState(__instance));
+            IRunState? runState = GetRunState(__instance);
+            Player? player = PlayerContext.FromRunState(runState);
 
             string? text = LineBank.Pick(
                 Scenes.RestSite,
                 PlayerContext.CharacterId(player),
-                PlayerContext.ConditionsFor(player));
+                out string? usedCondition,
+                RestSiteConditions.For(player, runState));
 
             if (string.IsNullOrEmpty(text)) return;
 
             GetHeader(__instance)?.SetTextAutoSize(text);
+
+            // 壶铃练满那句是“只播一次”：真播出去了才记下来，
+            // 所以被更高优先级的台词顶掉时会自动顺延到下次火堆。
+            if (usedCondition == Conditions.GiryaMaxed)
+            {
+                OneShot.MarkDone(RestSiteConditions.GiryaAnnouncedKey(player, runState));
+            }
         }
         catch (Exception e)
         {

@@ -114,6 +114,16 @@ internal static class LineBank
     /// </summary>
     internal static string? Pick(string scene, string? characterId, params string[] conditions)
     {
+        return Pick(scene, characterId, out _, conditions);
+    }
+
+    /// <summary>
+    /// 同上，但额外告诉你这次命中的是哪个条件（没有命中条件池就是 null）。
+    /// 用于“只播一次”这种需要知道到底播了哪句的场景。
+    /// </summary>
+    internal static string? Pick(string scene, string? characterId, out string? usedCondition, params string[] conditions)
+    {
+        usedCondition = null;
         EnsureEditableFile();
 
         LineFile? file = LoadFirstAvailable();
@@ -132,7 +142,11 @@ internal static class LineBank
                 if (chance < 1.0 && Random.Shared.NextDouble() >= chance) continue;
 
                 string? conditioned = Draw(lineScene, characterId, condition, file.DefaultChance);
-                if (conditioned is not null) return conditioned; // 条件池里没写这个角色 → 继续找
+                if (conditioned is not null)
+                {
+                    usedCondition = condition;
+                    return conditioned; // 条件池里没写这个角色 → 继续找下一个
+                }
             }
         }
 
@@ -269,7 +283,7 @@ internal static class LineBank
             || path.StartsWith("user://", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool FileExists(string path)
+    internal static bool FileExists(string path)
     {
         try
         {
@@ -281,7 +295,7 @@ internal static class LineBank
         }
     }
 
-    private static string? ReadText(string path)
+    internal static string? ReadText(string path)
     {
         try
         {
@@ -302,7 +316,7 @@ internal static class LineBank
         }
     }
 
-    private static bool TryWriteText(string path, string text)
+    internal static bool TryWriteText(string path, string text)
     {
         try
         {

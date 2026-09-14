@@ -99,6 +99,31 @@ ID 就是游戏本地化里 `xxx.title` 的前缀（可参考 `_ref\loc_zhs`）�
 | 条件名 | 触发时机 | 数据来源 |
 |---|---|---|
 | `low_hp` | 血量 ≤ 25% | 游戏自己的 `CharacterModel.IsLowHealth`（与低血边框动画同源），拿不到时退回公开的 `GetHpPercentRemaining() <= 0.25` |
+| `candle_low` | 南瓜蜡烛剩余层数 ≤ 2 | `PumpkinCandle.KindleCount` |
+| `girya_maxed` | 壶铃已练满（`TimesLifted >= maxLifts`） | `Girya.TimesLifted` / `Girya.maxLifts`，**只播一次**（记录在 `%AppData%\SlayTheSpire2\CharacterLines\state.json`） |
+| `girya_progress` | 壶铃还没练满 | 同上 |
+| `relic_shovel` | 拥有铲子 | 遗物 `Shovel` |
+| `relic_cleaver` | 拥有切肉刀 | 遗物 `MeatCleaver` |
+| `relic_tent` | 拥有微型帐篷 | 遗物 `MiniatureTent` |
+| `relic_dream_catcher` | 拥有捕梦网 | 遗物 `DreamCatcher` |
+| `relic_mailbox` | 拥有小邮箱 | 遗物 `TinyMailbox` |
+| `relic_pillow` | 拥有皇家枕头 | 遗物 `RegalPillow` |
+| `relic_paels_growth` | 拥有佩尔的增生组织 | 遗物 `PaelsGrowth` |
+
+### 火堆条件的优先级
+
+同一时刻可能有多个条件满足，按这个顺序从上往下试（前面命中就不看后面的）：
+
+```
+candle_low        ← 能立刻操作的提示（该添火了），最重要
+girya_maxed       ← 壶铃练满的一次性纪念播报（被上面顶掉时不消耗，顺延到下次火堆）
+low_hp            ← 血量低
+relic_* 各遗物氛围 ← 各自按 _conditionChance 小概率出现
+girya_progress    ← 还没练满时的鼓励
+```
+
+> 「顺延」是这么实现的：只有真的把 `girya_maxed` 那句显示出来之后，才会写进
+> `state.json`；被更高优先级的台词顶掉时什么都不记，下次火堆继续尝试。
 
 ---
 
@@ -197,6 +222,17 @@ git push -u origin main
 改完没生效？① 改的是优先级更低的那份；② 在火堆里改的（要出去再进来）；
 ③ JSON 语法错误（日志有提示）。
 
+**如果 `build.ps1` 报奇怪的语法错误**（类似 `Unexpected token ...`）：多半是脚本的
+UTF-8 BOM 丢了 —— Windows PowerShell 5.1 会把没有 BOM 的 `.ps1` 按本地编码（GBK）读，
+中文注释就被解成乱码把语法搞坏。修法：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File fix-encoding.ps1
+```
+
+（它会检查本目录所有 `.ps1`，缺 BOM 的补上；不是合法 UTF-8 的会跳过不动。
+用 VS Code 编辑时右下角编码选 “UTF-8 with BOM” 就不会再丢。）
+
 ---
 
 ## 8. 原理
@@ -210,6 +246,7 @@ git push -u origin main
         - Header 是私有属性（Godot [Export]）→ AccessTools.PropertyGetter 反射
         - _runState 是私有字段 → AccessTools.FieldRefAccess，再 LocalContext.GetMe 取角色
         - 低血条件 → CharacterModel.IsLowHealth（protected，反射取），退回 25% 规则
+        - 遗物条件 → Player.Relics 按 ID / 类型找，南瓜蜡烛读 KindleCount、壶铃读 TimesLifted
         - 悬停选项改的是 Description 标签，不会覆盖 Header
 ```
 
@@ -218,7 +255,9 @@ git push -u origin main
 | 文件 | 作用 |
 |---|---|
 | `LineBank.cs` | 台词库：读 JSON、按场景/角色/条件抽；三处来源优先级 |
-| `PlayerContext.cs` | 取当前玩家、角色 ID、条件（低血判定） |
+| `PlayerContext.cs` | 取当前玩家、角色 ID、低血判定、按 ID/类型找遗物 |
+| `Conditions.cs` | 条件名 + 火堆条件优先级（含各遗物判定） |
+| `OneShot.cs` | “只播一次”的记录，存 `%AppData%\SlayTheSpire2\CharacterLines\state.json` |
 | `SceneRestSite.cs` | 火堆场景补丁（加场景照这个写） |
 | `CharacterLinesBootstrap.cs` | 入口：`PatchAll` + 生成可编辑台词文件 |
 
