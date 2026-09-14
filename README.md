@@ -109,6 +109,9 @@ ID 就是游戏本地化里 `xxx.title` 的前缀（可参考 `_ref\loc_zhs`）�
 | `relic_mailbox` | 拥有小邮箱 | 遗物 `TinyMailbox` |
 | `relic_pillow` | 拥有皇家枕头 | 遗物 `RegalPillow` |
 | `relic_paels_growth` | 拥有佩尔的增生组织 | 遗物 `PaelsGrowth` |
+| `relic_humidifier` | 拥有石炉加湿器 | 遗物 `StoneHumidifier` |
+| `relic_tea_set` | 拥有古茶具套装 | 遗物 `VenerableTeaSet` |
+| `relic_fake_tea_set` | 拥有古茶具套装？？？ | 遗物 `FakeVenerableTeaSet`，**同时有真货时不出现** |
 
 ### 火堆条件的优先级
 

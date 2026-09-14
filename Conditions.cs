@@ -31,6 +31,9 @@ internal static class Conditions
     internal const string Mailbox = "relic_mailbox";                // 小邮箱
     internal const string Pillow = "relic_pillow";                  // 皇家枕头
     internal const string PaelsGrowth = "relic_paels_growth";       // 佩尔的增生组织（克隆）
+    internal const string Humidifier = "relic_humidifier";          // 石炉加湿器（休息 +5 最大生命）
+    internal const string TeaSet = "relic_tea_set";                 // 古茶具套装（下场战斗 +2 费）
+    internal const string FakeTeaSet = "relic_fake_tea_set";        // 古茶具套装？？？（假货，+1 费）
 }
 
 /// <summary>
@@ -107,6 +110,15 @@ internal static class RestSiteConditions
             if (PlayerContext.FindRelic<TinyMailbox>(player) is not null) conditions.Add(Conditions.Mailbox);
             if (PlayerContext.FindRelic<RegalPillow>(player) is not null) conditions.Add(Conditions.Pillow);
             if (PlayerContext.FindRelic<PaelsGrowth>(player) is not null) conditions.Add(Conditions.PaelsGrowth);
+            if (PlayerContext.FindRelic<StoneHumidifier>(player) is not null) conditions.Add(Conditions.Humidifier);
+
+            // 真假茶具：有真货就不说假货那几句
+            bool hasRealTeaSet = PlayerContext.FindRelic<VenerableTeaSet>(player) is not null;
+            if (hasRealTeaSet) conditions.Add(Conditions.TeaSet);
+            if (!hasRealTeaSet && PlayerContext.FindRelic<FakeVenerableTeaSet>(player) is not null)
+            {
+                conditions.Add(Conditions.FakeTeaSet);
+            }
 
             // 5) 壶铃还没练满
             if (girya is not null && girya.TimesLifted < GiryaMaxLifts())
