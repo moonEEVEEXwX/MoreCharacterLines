@@ -1,15 +1,15 @@
 ﻿<#
-  RestSitePrompts 构建脚本（Windows）
+  CharacterLines 构建脚本（Windows）
   用法：
       powershell -ExecutionPolicy Bypass -File build.ps1
       powershell -ExecutionPolicy Bypass -File build.ps1 -GameDir "X:\...\Slay the Spire 2"
       powershell -ExecutionPolicy Bypass -File build.ps1 -OutDir "D:\somewhere"     # 只编译，不装进游戏目录
 
   步骤：
-    1) 编译 RestSitePrompts.dll
+    1) 编译 CharacterLines.dll
        （优先 dotnet build；如果机器上只有 .NET 8 SDK，则用 SDK 自带的 Roslyn csc + 游戏目录里的 .NET 9 运行时程序集直接编译）
-    2) 把 assets/ 和台词 JSON 打包成 RestSitePrompts.pck
-    3) 把 RestSitePrompts.dll / .pck / <id>.json 复制到 游戏目录\mods\RestSitePrompts\
+    2) 把 assets/ 和台词 JSON 打包成 CharacterLines.pck
+    3) 把 CharacterLines.dll / .pck / <id>.json / lines.json 复制到 游戏目录\mods\CharacterLines\
 #>
 param(
     [string]$GameDir = "",
@@ -18,7 +18,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$modId = "RestSitePrompts"
+$modId = "CharacterLines"
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Write-Step([string]$text) { Write-Host ""; Write-Host "==> $text" -ForegroundColor Cyan }
@@ -105,7 +105,9 @@ if (Test-DotnetSdk9) {
         if (Test-ManagedAssembly $file.FullName) { $refs += "-r:" + $file.FullName }
     }
     Write-Host "引用托管程序集 $($refs.Count) 个"
-    $sources = @(Get-ChildItem -Path $projectDir -Filter *.cs | ForEach-Object { $_.FullName })
+    $sources = @(Get-ChildItem -Path $projectDir -Recurse -Filter *.cs |
+        Where-Object { $_.FullName -notlike "*\bin\*" -and $_.FullName -notlike "*\obj\*" } |
+        ForEach-Object { $_.FullName })
     if ($sources.Count -eq 0) { throw "$projectDir 下没找到 .cs 源文件" }
 
     $cscArgs = @(
@@ -154,7 +156,7 @@ function Install-Files([string]$dest) {
     # 这样记事本 / PowerShell 这类 Windows 工具打开中文不会乱码。
     $linesDest = Join-Path $dest "lines.json"
     if (-not (Test-Path $linesDest)) {
-        $text = [System.IO.File]::ReadAllText((Join-Path $projectDir "assets\$modId\rest_site_prompts.json"), (New-Object System.Text.UTF8Encoding($false)))
+        $text = [System.IO.File]::ReadAllText((Join-Path $projectDir "assets\$modId\lines.json"), (New-Object System.Text.UTF8Encoding($false)))
         [System.IO.File]::WriteAllText($linesDest, $text, (New-Object System.Text.UTF8Encoding($true)))
         Write-Host "已放入可编辑台词文件：$linesDest"
     } else {
@@ -195,7 +197,7 @@ try {
 Write-Host ""
 if ($installOk) {
     Write-Host "构建完成，已安装到：$OutDir" -ForegroundColor Green
-    Write-Host "改台词不用重新编译：编辑 $OutDir\lines.json（或 %AppData%\SlayTheSpire2\RestSitePrompts\lines.json），然后重进一次火堆。" -ForegroundColor Green
+    Write-Host "改台词不用重新编译：编辑 $OutDir\lines.json（或 %AppData%\SlayTheSpire2\CharacterLines\lines.json），然后重进一次火堆。" -ForegroundColor Green
 } else {
     Write-Host "构建完成，产物在：$OutDir" -ForegroundColor Green
     Write-Host "请把该目录整体复制到 游戏目录\mods\ 下。" -ForegroundColor Yellow
