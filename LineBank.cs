@@ -54,6 +54,12 @@ internal sealed class LineFile
     /// <summary>文件级条件概率（_conditionChance.&lt;条件名&gt; = 概率）。</summary>
     internal readonly Dictionary<string, double> ConditionChances = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>每拥有 1 个火堆遗物，「说遗物台词」的概率（_relicFlavor.perRelic）。</summary>
+    internal double RelicFlavorPerRelic = LineBank.RelicFlavorPerRelicFallback;
+
+    /// <summary>遗物台词概率的上限（_relicFlavor.max）。</summary>
+    internal double RelicFlavorMax = LineBank.RelicFlavorMaxFallback;
+
     internal readonly Dictionary<string, LineScene> Scenes = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -96,6 +102,15 @@ internal static class LineBank
     /// <summary>有专属台词的角色抽到 DEFAULT 通用池的默认概率（可用 _defaultChance 覆盖）。</summary>
     internal const double DefaultChanceFallback = 0.1;
 
+    /// <summary>每拥有 1 个火堆遗物，说遗物台词的默认概率（可用 _relicFlavor.perRelic 覆盖）。</summary>
+    internal const double RelicFlavorPerRelicFallback = 0.25;
+
+    /// <summary>遗物台词概率的默认上限（可用 _relicFlavor.max 覆盖）。</summary>
+    internal const double RelicFlavorMaxFallback = 0.8;
+
+    /// <summary>遗物氛围条件的命名前缀（relic_shovel / relic_cleaver / ...）。</summary>
+    internal const string RelicConditionPrefix = "relic_";
+
     private static readonly string[] DefaultKeys = { "DEFAULT", "default", "通用", "默认" };
     private static readonly string[] NormalAliases = { "normal", "default", "正常", "平时" };
 
@@ -130,12 +145,31 @@ internal static class LineBank
         if (file is null) return null;
         if (!file.Scenes.TryGetValue(scene, out LineScene? lineScene)) return null;
 
-        // 1) 条件池优先（比如血量低时说的话）
+        bool relicGroupHandled = false;
+
+        // 1) 条件池优先（按调用方给的顺序）
         if (conditions is not null)
         {
             foreach (string condition in conditions)
             {
                 if (string.IsNullOrWhiteSpace(condition)) continue;
+
+                // 遗物氛围条件当成「一组」处理：先按遗物数量掷一次“要不要说遗物台词”，
+                // 命中再在组内随机挑一个池子。这样拿的遗物越多，平时的台词就越少出现。
+                if (IsRelicCondition(condition))
+                {
+                    if (relicGroupHandled) continue;
+                    relicGroupHandled = true;
+
+                    string? relicLine = TryRelicGroup(lineScene, characterId, conditions, file, out string? relicCondition);
+                    if (relicLine is not null)
+                    {
+                        usedCondition = relicCondition;
+                        return relicLine;
+                    }
+
+                    continue; // 没命中（或池里没写词）→ 继续后面的条件（比如 girya_progress）
+                }
 
                 double chance = ResolveConditionChance(lineScene, file, condition);
                 if (chance <= 0.0) continue;
@@ -145,13 +179,60 @@ internal static class LineBank
                 if (conditioned is not null)
                 {
                     usedCondition = condition;
-                    return conditioned; // 条件池里没写这个角色 → 继续找下一个
+                    return conditioned;
                 }
             }
         }
 
         // 2) 平时的池子
         return Draw(lineScene, characterId, NormalPool, file.DefaultChance);
+    }
+
+    /// <summary>
+    /// 遗物氛围台词：概率 = perRelic × 拥有的火堆遗物个数（上限 max）。
+    /// 命中后在组内随机挑一个（避免永远只说列表里第一个遗物的话）。
+    /// </summary>
+    private static string? TryRelicGroup(
+        LineScene scene, string? characterId, string[] conditions, LineFile file, out string? usedCondition)
+    {
+        usedCondition = null;
+
+        var group = new List<string>();
+        foreach (string condition in conditions)
+        {
+            if (IsRelicCondition(condition)) group.Add(condition);
+        }
+
+        if (group.Count == 0) return null;
+
+        double max = Math.Clamp(file.RelicFlavorMax, 0.0, 1.0);
+        double share = Math.Clamp(file.RelicFlavorPerRelic * group.Count, 0.0, max);
+        if (share <= 0.0) return null;
+        if (share < 1.0 && Random.Shared.NextDouble() >= share) return null;
+
+        for (int i = group.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (group[i], group[j]) = (group[j], group[i]);
+        }
+
+        foreach (string condition in group)
+        {
+            string? line = Draw(scene, characterId, condition, file.DefaultChance);
+            if (line is not null)
+            {
+                usedCondition = condition;
+                return line;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>是不是遗物氛围条件（relic_ 开头）。</summary>
+    internal static bool IsRelicCondition(string condition)
+    {
+        return condition.StartsWith(RelicConditionPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static double ResolveConditionChance(LineScene scene, LineFile file, string condition)
@@ -378,6 +459,12 @@ internal static class LineBank
                     continue;
                 }
 
+                if (string.Equals(key, "_relicFlavor", StringComparison.OrdinalIgnoreCase))
+                {
+                    ParseRelicFlavor(property.Value, file);
+                    continue;
+                }
+
                 if (key.StartsWith("_", StringComparison.Ordinal)) continue;
                 if (property.Value.ValueKind != JsonValueKind.Object) continue;
 
@@ -480,6 +567,26 @@ internal static class LineBank
             if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDouble(out double chance))
             {
                 target[property.Name] = Math.Clamp(chance, 0.0, 1.0);
+            }
+        }
+    }
+
+    /// <summary>解析 _relicFlavor: { perRelic, max } —— 遗物台词占比。</summary>
+    private static void ParseRelicFlavor(JsonElement element, LineFile file)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return;
+
+        foreach (JsonProperty property in element.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetDouble(out double value)) continue;
+
+            if (string.Equals(property.Name, "perRelic", StringComparison.OrdinalIgnoreCase))
+            {
+                file.RelicFlavorPerRelic = Math.Clamp(value, 0.0, 1.0);
+            }
+            else if (string.Equals(property.Name, "max", StringComparison.OrdinalIgnoreCase))
+            {
+                file.RelicFlavorMax = Math.Clamp(value, 0.0, 1.0);
             }
         }
     }

@@ -14,9 +14,21 @@
 //      （0 = 永远只说自己的，1 = 永远说通用的）
 //
 //  ── 条件与概率 ───────────────────────────────────────────────────────────
-//  满足条件时优先说条件池里的话；概率写在 "_conditionChance" 里（0~1）：
-//      1      = 满足就一定说
-//      0.15   = 只有 15% 的机会说（小概率的彩蛋）
+//  满足条件时优先说条件池里的话。概率有两套：
+//
+//  1) 状态类条件（血量、蜡烛、壶铃）写在场景的 "_conditionChance" 里：
+//         "low_hp": 0.8     = 血量低时有 80% 说 low_hp 里的话
+//         "girya_maxed": 1  = 满足就一定说
+//  2) 遗物氛围条件（relic_ 开头的那些）用 "_relicFlavor" 统一控制占比：
+//         perRelic = 每拥有 1 个火堆遗物，说遗物台词的概率
+//         max      = 上限
+//     默认 0.25 / 0.8，也就是：
+//         1 个遗物 → 25%      2 个 → 50%
+//         3 个 → 75%          4 个及以上 → 80%
+//     余下的概率才轮到角色自己的台词（或通用台词）。
+//     —— 拿的火堆遗物越多，越容易看到遗物相关的台词，不会白拿。
+//     想让遗物台词少出现就把 perRelic 调小；写 0 等于关掉（回到只说普通台词）。
+//
 //  场景里的 "_conditionChance" 优先于文件顶层的同名设置。
 //
 //  火堆（rest_site）已有的条件：
@@ -49,23 +61,17 @@
 {
   "_defaultChance": 0.1,
 
+  // 遗物台词占比：拥有 N 个火堆遗物 → 说遗物台词的概率 = perRelic × N（不超过 max）
+  "_relicFlavor": { "perRelic": 0.25, "max": 0.8 },
+
   // ── 火堆 ────────────────────────────────────────────────────────────────
   "rest_site": {
+    // 状态类条件的概率（遗物氛围条件不看这里，见上面的 _relicFlavor）
     "_conditionChance": {
       "low_hp": 0.8,
       "candle_low": 0.8,
       "girya_maxed": 1,
-      "girya_progress": 0.15,
-      "relic_shovel": 0.15,
-      "relic_cleaver": 0.15,
-      "relic_tent": 0.15,
-      "relic_dream_catcher": 0.15,
-      "relic_mailbox": 0.15,
-      "relic_pillow": 0.15,
-      "relic_paels_growth": 0.15,
-      "relic_humidifier": 0.15,
-      "relic_tea_set": 0.15,
-      "relic_fake_tea_set": 0.15
+      "girya_progress": 0.15
     },
 
     "IRONCLAD": {
