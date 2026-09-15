@@ -55,6 +55,16 @@ if (-not (Test-Path (Join-Path $sts2Dir "sts2.dll"))) {
 }
 Write-Host "游戏目录：$GameDir"
 
+# ── 1.5 校验台词文件（少逗号/少引号这类手滑会在这里被拦下来，而不是静默退回旧文本）──
+Write-Step "校验台词文件"
+$linesJson = Join-Path $projectDir "assets\$modId\lines.json"
+$checkScript = Join-Path $projectDir "check_lines.py"
+if (-not (Test-Path $checkScript)) { throw "缺少 check_lines.py" }
+& python $checkScript $linesJson
+if ($LASTEXITCODE -ne 0) {
+    throw "lines.json 语法有误（见上面的行号），已中止构建。"
+}
+
 # ── 2. 编译 DLL ──────────────────────────────────────────────────────────────
 Write-Step "编译 $modId.dll"
 
