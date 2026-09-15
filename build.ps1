@@ -184,7 +184,7 @@ function Install-Files([string]$dest) {
     }
 
     # 说明文档也一起放进去，方便别人打开 mod 文件夹就知道怎么改
-    foreach ($doc in @("README.md", "THIRD_PARTY.md")) {
+    foreach ($doc in @("README.md", "DESIGN.md", "THIRD_PARTY.md")) {
         $src = Join-Path $projectDir $doc
         if (Test-Path $src) { Copy-Item $src (Join-Path $dest $doc) -Force }
     }
