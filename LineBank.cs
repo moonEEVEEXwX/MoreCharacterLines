@@ -13,7 +13,7 @@ internal static class Scenes
     /// <summary>火堆（休息处）：顶部那句提示语。</summary>
     internal const string RestSite = "rest_site";
 
-    /// <summary>多人模式催促 / ping —— JSON 里已经留好位置，代码还没接。</summary>
+    /// <summary>多人模式催促 / ping —— 气泡里那句催促语（见 ScenePing.cs）。</summary>
     internal const string Ping = "ping";
 }
 
@@ -60,7 +60,26 @@ internal sealed class LineFile
     /// <summary>遗物台词概率的上限（_relicFlavor.max）。</summary>
     internal double RelicFlavorMax = LineBank.RelicFlavorMaxFallback;
 
+    /// <summary>催促语气变「更急」的等待秒数（_ping.urgentAfterSeconds）。</summary>
+    internal int PingUrgentAfterSeconds = LineBank.PingUrgentAfterSecondsFallback;
+
+    /// <summary>催促语气变「更凶」的等待秒数（_ping.angryAfterSeconds）。</summary>
+    internal int PingAngryAfterSeconds = LineBank.PingAngryAfterSecondsFallback;
+
     internal readonly Dictionary<string, LineScene> Scenes = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>ping 场景的时间设置（从 lines.json 的 _ping 读，读不到就用兜底值）。</summary>
+internal readonly struct PingTiming
+{
+    internal readonly int UrgentAfterSeconds;
+    internal readonly int AngryAfterSeconds;
+
+    internal PingTiming(int urgentAfterSeconds, int angryAfterSeconds)
+    {
+        UrgentAfterSeconds = urgentAfterSeconds;
+        AngryAfterSeconds = angryAfterSeconds;
+    }
 }
 
 /// <summary>
@@ -76,6 +95,7 @@ internal sealed class LineFile
 ///   {
 ///     "_defaultChance": 0.1,
 ///     "_conditionChance": { "low_hp": 0.8 },
+///     "_ping": { "urgentAfterSeconds": 60, "angryAfterSeconds": 300 },
 ///     "rest_site": {
 ///       "IRONCLAD": {
 ///         "normal": ["平时说的话...", "..."],
@@ -111,6 +131,12 @@ internal static class LineBank
     /// <summary>遗物氛围条件的命名前缀（relic_shovel / relic_cleaver / ...）。</summary>
     internal const string RelicConditionPrefix = "relic_";
 
+    /// <summary>催促语变「更急」的默认等待秒数（1 分钟）。</summary>
+    internal const int PingUrgentAfterSecondsFallback = 60;
+
+    /// <summary>催促语变「更凶」的默认等待秒数（5 分钟）。</summary>
+    internal const int PingAngryAfterSecondsFallback = 300;
+
     private static readonly string[] DefaultKeys = { "DEFAULT", "default", "通用", "默认" };
     private static readonly string[] NormalAliases = { "normal", "default", "正常", "平时" };
 
@@ -138,6 +164,23 @@ internal static class LineBank
     /// </summary>
     internal static string? Pick(string scene, string? characterId, out string? usedCondition, params string[] conditions)
     {
+        return PickCore(scene, characterId, Random.Shared, out usedCondition, conditions);
+    }
+
+    /// <summary>
+    /// 确定性抽取：同一个 seed + 同一份 lines.json ⇒ 永远抽出同一句。
+    ///
+    /// ping（多人催促）用它来保证**两端客户端显示同一句话**：种子由两端都相同的
+    /// 同步状态（回合号 + 玩家 NetId + 语气档位）算出来，谁都不需要额外发网络消息 ——
+    /// 所以没装这个 mod 的玩家照样联机，只是他那边显示游戏原话。
+    /// </summary>
+    internal static string? PickDeterministic(string scene, string? characterId, int seed, out string? usedCondition, params string[] conditions)
+    {
+        return PickCore(scene, characterId, new Random(seed), out usedCondition, conditions);
+    }
+
+    private static string? PickCore(string scene, string? characterId, Random rng, out string? usedCondition, string[] conditions)
+    {
         usedCondition = null;
         EnsureEditableFile();
 
@@ -161,7 +204,7 @@ internal static class LineBank
                     if (relicGroupHandled) continue;
                     relicGroupHandled = true;
 
-                    string? relicLine = TryRelicGroup(lineScene, characterId, conditions, file, out string? relicCondition);
+                    string? relicLine = TryRelicGroup(lineScene, characterId, conditions, file, rng, out string? relicCondition);
                     if (relicLine is not null)
                     {
                         usedCondition = relicCondition;
@@ -173,9 +216,9 @@ internal static class LineBank
 
                 double chance = ResolveConditionChance(lineScene, file, condition);
                 if (chance <= 0.0) continue;
-                if (chance < 1.0 && Random.Shared.NextDouble() >= chance) continue;
+                if (chance < 1.0 && rng.NextDouble() >= chance) continue;
 
-                string? conditioned = Draw(lineScene, characterId, condition, file.DefaultChance);
+                string? conditioned = Draw(lineScene, characterId, condition, file.DefaultChance, rng);
                 if (conditioned is not null)
                 {
                     usedCondition = condition;
@@ -185,7 +228,16 @@ internal static class LineBank
         }
 
         // 2) 平时的池子
-        return Draw(lineScene, characterId, NormalPool, file.DefaultChance);
+        return Draw(lineScene, characterId, NormalPool, file.DefaultChance, rng);
+    }
+
+    /// <summary>ping 的时间设置（从当前生效的那份 lines.json 读）。</summary>
+    internal static PingTiming GetPingTiming()
+    {
+        LineFile? file = LoadFirstAvailable();
+        return new PingTiming(
+            file?.PingUrgentAfterSeconds ?? PingUrgentAfterSecondsFallback,
+            file?.PingAngryAfterSeconds ?? PingAngryAfterSecondsFallback);
     }
 
     /// <summary>
@@ -193,7 +245,7 @@ internal static class LineBank
     /// 命中后在组内随机挑一个（避免永远只说列表里第一个遗物的话）。
     /// </summary>
     private static string? TryRelicGroup(
-        LineScene scene, string? characterId, string[] conditions, LineFile file, out string? usedCondition)
+        LineScene scene, string? characterId, string[] conditions, LineFile file, Random rng, out string? usedCondition)
     {
         usedCondition = null;
 
@@ -208,17 +260,17 @@ internal static class LineBank
         double max = Math.Clamp(file.RelicFlavorMax, 0.0, 1.0);
         double share = Math.Clamp(file.RelicFlavorPerRelic * group.Count, 0.0, max);
         if (share <= 0.0) return null;
-        if (share < 1.0 && Random.Shared.NextDouble() >= share) return null;
+        if (share < 1.0 && rng.NextDouble() >= share) return null;
 
         for (int i = group.Count - 1; i > 0; i--)
         {
-            int j = Random.Shared.Next(i + 1);
+            int j = rng.Next(i + 1);
             (group[i], group[j]) = (group[j], group[i]);
         }
 
         foreach (string condition in group)
         {
-            string? line = Draw(scene, characterId, condition, file.DefaultChance);
+            string? line = Draw(scene, characterId, condition, file.DefaultChance, rng);
             if (line is not null)
             {
                 usedCondition = condition;
@@ -243,20 +295,20 @@ internal static class LineBank
     }
 
     /// <summary>从某个池子里抽：优先该角色，其次 DEFAULT（并按概率混用）。</summary>
-    private static string? Draw(LineScene scene, string? characterId, string pool, double defaultChance)
+    private static string? Draw(LineScene scene, string? characterId, string pool, double defaultChance, Random rng)
     {
         List<string>? characterLines = scene.Pool(characterId, pool);
         List<string>? defaults = scene.DefaultPool(pool, DefaultKeys);
 
         bool useDefaults = characterLines is null || characterLines.Count == 0;
-        if (!useDefaults && defaults is { Count: > 0 } && Random.Shared.NextDouble() < defaultChance)
+        if (!useDefaults && defaults is { Count: > 0 } && rng.NextDouble() < defaultChance)
             useDefaults = true;
 
         List<string>? chosen = useDefaults ? defaults : characterLines;
         chosen ??= characterLines ?? defaults;
         if (chosen is null || chosen.Count == 0) return null;
 
-        return chosen[Random.Shared.Next(chosen.Count)];
+        return chosen[rng.Next(chosen.Count)];
     }
 
     // ── 可编辑文件 ──────────────────────────────────────────────────────────
@@ -423,7 +475,8 @@ internal static class LineBank
 
     /// <summary>
     /// 宽容解析：允许 BOM、// 注释、结尾多余逗号；
-    /// 台词写成字符串或字符串数组都行；_ 开头的键当注释（除了 _defaultChance / _conditionChance / _conditions）。
+    /// 台词写成字符串或字符串数组都行；_ 开头的键当注释
+    /// （除了 _defaultChance / _conditionChance / _relicFlavor / _ping）。
     /// </summary>
     private static LineFile? Parse(string json)
     {
@@ -462,6 +515,12 @@ internal static class LineBank
                 if (string.Equals(key, "_relicFlavor", StringComparison.OrdinalIgnoreCase))
                 {
                     ParseRelicFlavor(property.Value, file);
+                    continue;
+                }
+
+                if (string.Equals(key, "_ping", StringComparison.OrdinalIgnoreCase))
+                {
+                    ParsePing(property.Value, file);
                     continue;
                 }
 
@@ -587,6 +646,28 @@ internal static class LineBank
             else if (string.Equals(property.Name, "max", StringComparison.OrdinalIgnoreCase))
             {
                 file.RelicFlavorMax = Math.Clamp(value, 0.0, 1.0);
+            }
+        }
+    }
+
+    /// <summary>解析 _ping: { urgentAfterSeconds, angryAfterSeconds } —— 催促语气的时间阈值（秒）。</summary>
+    private static void ParsePing(JsonElement element, LineFile file)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return;
+
+        foreach (JsonProperty property in element.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetDouble(out double value)) continue;
+
+            int seconds = (int)Math.Clamp(value, 1.0, 24 * 60 * 60.0);
+
+            if (string.Equals(property.Name, "urgentAfterSeconds", StringComparison.OrdinalIgnoreCase))
+            {
+                file.PingUrgentAfterSeconds = seconds;
+            }
+            else if (string.Equals(property.Name, "angryAfterSeconds", StringComparison.OrdinalIgnoreCase))
+            {
+                file.PingAngryAfterSeconds = seconds;
             }
         }
     }

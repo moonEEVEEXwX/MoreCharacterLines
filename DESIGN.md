@@ -9,7 +9,7 @@
 ## 0. 一句话
 
 给游戏里**固定的文案**配上「按 **角色** / 按 **遗物** / 按 **状态**」随机抽取的台词。
-目前接入的场景：**火堆（休息处）顶部那句提示语**。
+目前接入的场景：**火堆（休息处）顶部那句提示语**、**多人催促（ping）头顶气泡**。
 
 ---
 
@@ -41,7 +41,9 @@
 |---|---|
 | `MoreCharacterLinesBootstrap.cs` | 入口：`[ModInitializer]` → `PatchAll` + 生成可编辑台词文件 |
 | `SceneRestSite.cs` | 火堆场景补丁：挂在 `NRestSiteRoom._Ready` 后面改写 `Header` |
-| `Conditions.cs` | 条件名常量 + 火堆条件优先级 + 遗物判定（**纯函数** `FlavorConditions`） |
+| `ScenePing.cs` | 多人催促补丁：挂在 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary` 后面换掉气泡文本 |
+| `PingClock.cs` | 催促计时：≥50% 玩家结束回合后开始等，1 分钟 / 5 分钟分档（挂在 `SetReadyToEndTurn` / `UndoReadyToEndTurn` 后面） |
+| `Conditions.cs` | 条件名常量 + 火堆条件优先级 + 遗物判定 + 催促语气分档（**纯函数** `FlavorConditions` / `PingTone`） |
 | `PlayerContext.cs` | 游戏侧上下文：当前玩家、角色 ID、低血判定、按类型/ID 找遗物 |
 | `LineBank.cs` | 台词库：读三处 `lines.json`、解析、按场景/角色/条件抽取 |
 | `OneShot.cs` | "只播一次"记录（`%AppData%\SlayTheSpire2\MoreCharacterLines\state.json`） |
@@ -61,6 +63,41 @@
         ├─ 写回 Header 文本（`MegaLabel.SetTextAutoSize`）
         └─ 若命中的是一次性条件（girya_maxed）→ OneShot.MarkDone(...)
 ```
+
+```
+多人催促（ping）：结束回合后按 Ping 按钮
+   NPingButton.OnRelease
+     └─ FlavorSynchronizer.SendEndTurnPing()
+          └─ CreateEndTurnPingDialogueIfNecessary(player)   ← 本地 / 远端两条路都汇到这里
+               └─ 补丁 Postfix
+                    ├─ 死人就撒手（保持原版「……」，见 §4）
+                    ├─ PingClock.CurrentTier(player, _ping)：算出语气档位（正常 / 更急 / 更凶）
+                    ├─ ScenePing.Seed(回合号, player.NetId, 档位) → 两端同一个种子
+                    ├─ LineBank.PickDeterministic(ping, 角色, 种子, 档位条件池)
+                    └─ 把气泡标签里那句原话换成我们的（保留游戏自己的 [center][fly_in] 包装）
+```
+
+### 多人催促（ping）为什么两端显示同一句
+
+催促气泡是**各客户端本地生成**的（催促者自己弹一条，收到消息的客户端也弹一条），
+两端各抽各的就会出现「同一句话两边不一样」。本 mod 的做法是**不新增任何网络消息**，
+让两端用**同一份同步状态**算出同一个种子：
+
+| 种子材料 | 为什么两端相同 |
+|---|---|
+| `CombatState.RoundNumber` | 回合号是同步的模拟状态 |
+| `player.NetId` | 催促者的网络 ID，两端一致 |
+| 语气档位（`PingClock`） | 计时起点来自两端都会跑的「结束回合」事件 |
+
+于是**装的两个人看到的台词完全一致**；**没装 mod 的玩家不受影响** ——
+我们不发自定义消息、也不改游戏消息结构，他那边照旧显示游戏原话（`快点。` 等）。
+
+> **为什么不用「本回合第几次 ping」当种子**：`EndTurnPingMessage` 走的是**不可靠通道**
+> （`Mode = 1`，和心跳同级；玩法消息如 `ActionMessage` 是 `Mode = 2`），丢包会让计数器
+> 两端错位，之后每一句都对不上。用同步状态做种子没有这个问题。
+>
+> 副作用：同一回合、同一档位内重复 ping 会说同一句（像同一个人反复催）。
+> 想要「每次都不一样」就得换成计数器方案，代价是丢包后错位 —— 有需求再评估。
 
 ### 台词文件来源（优先级从高到低）
 
@@ -159,6 +196,24 @@ girya_progress  ← 还没练满时的鼓励
   拿满遗物就 99% 全说遗物台词反而丢了味道。想更强势就把 `max` 调到 `1`。
 - **壶铃的"顺延"**：只有真的把 `girya_maxed` 播出去才记进 `state.json`；
   被更高优先级顶掉时不记账，下次火堆继续尝试。
+
+### 多人催促（ping）的语气分档
+
+| 档位 | 什么时候 | 池名 | 默认阈值 |
+|---|---|---|---|
+| 正常 | 刚结束回合 / 还没到 50% 人结束回合 | `normal`（游戏原句放第一条） | — |
+| 更急 | ≥50% 玩家已结束回合、其余人还在打 | `wait_urgent` | 60 秒 |
+| 更凶 | 同上，等得更久 | `wait_angry` | 300 秒 |
+
+- 计时从**「已结束回合的人数达到 50%」那一刻**开始，**到下一回合清零**
+  （`CombatState.RoundNumber` 一变就重置，不需要额外挂钩）。
+- 阈值写在 `lines.json` 的 `_ping.urgentAfterSeconds` / `angryAfterSeconds`：
+  **测试时改成 10 / 20 秒**就不用真等 5 分钟；50% 这个比例写死在 `PingTone.HalfwayRatio`。
+- 只有真的满足条件才升级：**没人结束回合**、或**只有 25% 人结束回合**时，等再久也是正常语气。
+- 档位条件在场景里是确定触发的（`"ping": { "_conditionChance": { "wait_urgent": 1, "wait_angry": 1 } }`）；
+  想让「更凶」只是有概率出现，把这两个数调小即可。
+- 优先级：`wait_angry` > `wait_urgent` > `normal`（池子没写就自动往下退）。
+- **死人不说话**：死亡状态原版就是 `……`，本 mod 不接管。
 
 ---
 
@@ -303,6 +358,19 @@ girya_progress  ← 还没练满时的鼓励
 **把游戏原句放在第一条**，后面补充同口吻的其他说法 —— 这样即使以后接上，
 也至少和原版一致，再叠加"更多变化"。写 ping 时注意它是**开口说话**，比火堆独白更外放。
 
+三档语气怎么写（`normal` / `wait_urgent` / `wait_angry`，规则见 §4）：
+
+- **更急**（默认 1 分钟）：还是同一个人，只是耐心在掉 —— 句子更短、语气更硬，**不要换人格**。
+- **更凶**（默认 5 分钟）：情绪真的上来了，但**别越界**：
+  - 铁甲战士：可以放狠话（「再不结束回合，我就自己上了。」），依然是短句；
+  - 储君：炸毛、拿身份压人（「你们竟敢让未来的王等这么久！！」）；
+  - 亡灵契约师：是**冷下来**（「我不想再等了。」），不是咆哮；
+  - 静默猎手：**仍然不开口** —— 用旁白/动作表现"她已经不等了"（磨刀、搭箭、走到门口）；
+  - 故障机器人：报警（`<危险的嘀嘀声>` / `0x45 0x52 0x52 0x4F 0x52` = ERROR）。
+- 气泡只显示 **1.5 秒**、而且 **1 秒限流**，所以句子必须短；气泡是**富文本**，
+  可以用 BBCode（`[sine]…[/sine]` / `[jitter]…[/jitter]` —— 原版故障机器人就这么用）。
+- 两个装了 mod 的玩家看到的是**同一句**（见 §2 同步机制），所以**别写只有自己才懂的梗**。
+
 ---
 
 ## 6. 命名与工程约定
@@ -351,10 +419,13 @@ girya_progress  ← 还没练满时的鼓励
 
 ## 8. 计划（TODO）
 
-**P0 — 待接入**
+**P0 — 已完成**
 
-- [ ] `ping`（多人催促）：JSON 已占位、抽取已验证可用；还差找到游戏里设置该文案的入口，
-      然后照 `SceneRestSite.cs` 写 `ScenePing.cs`
+- [x] `ping`（多人催促）：入口 = `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`
+      （本地 / 远端两条路都汇到这里）；
+      两端一致（同步状态派生种子）、死人保持原版、语气随时间分档（1 分钟更急 / 5 分钟更凶）。
+      代码见 `ScenePing.cs` / `PingClock.cs`，规则见 §2 与 §4。
+      **还差多人联机实测**（需要两台机器 / 两个客户端）。
 
 **P1 — 扩展场景/条件**
 
@@ -369,6 +440,8 @@ girya_progress  ← 还没练满时的鼓励
   角色个性交给 `normal` / `low_hp` 承载就够了。真想单独定制时，
   在某个角色那段里加同名池即可（机制支持，只是不作为默认内容）。
 - 首次获得某遗物时提高一次占比（"新玩具"加权），之后回归常态
+- **每次 ping 换一句**（而不是同一档位内重复同一句）：要把种子换成「本回合该玩家第几次 ping」，
+  但 `EndTurnPingMessage` 走不可靠通道，丢包会让两端计数器错位；先记在这里，真有需求再评估
 - 多语言：把 JSON 改成 `{"zhs": {...}, "eng": {...}}`，用 `LocManager.Instance.Language` 选一份
 
 **P3 — 工程**
@@ -399,6 +472,13 @@ girya_progress  ← 还没练满时的鼓励
 | 放弃 `working-tree-encoding=UTF-8-BOM` | Git for Windows 不支持该转换，`git add` 直接 fatal；改用 `fix-encoding.ps1` |
 | `build.ps1` 不覆盖 `lines.json` | 玩家就地改的台词不能被下次构建吞掉 |
 | 改名 `CharacterLines` → `MoreCharacterLines`，版本重置 `0.1.0` | 定位从"火堆那一句"扩成"**更多**角色台词"（下方 P0 要接 ping，后面还有事件 / 商店等）；改 id 是破坏性变更（旧目录必须删、AppData 数据目录跟着换），所以版本重新起算 |
+| 催促台词用**同步状态派生种子**，而不是发自定义消息同步 | 对端没装 mod 也能正常联机（不发自定义消息、不改游戏消息结构），同时两个装了 mod 的人看到同一句 |
+| 催促种子**不含**"本回合第几次 ping" | `EndTurnPingMessage` 走不可靠通道（`Mode = 1`；玩法消息是 `Mode = 2`），丢包会让计数器两端错位，之后每句都对不上；回合号 + NetId + 档位这三样在两端完全一致 |
+| 催促计时挂在 `SetReadyToEndTurn` / `UndoReadyToEndTurn` 后面，不订阅事件 | 这两个方法是确定性模拟的一部分，两端都会跑；省掉订阅生命周期、也不用新建 Godot 节点 |
+| 催促计时用各自的 `Time.GetTicksMsec()` | 两端观察同一个「结束回合」事件只差几十毫秒，而档位阈值是分钟级，判定结果一致 |
+| 死人（`Creature.IsDead`）不接管，保持原版 `……` | 玩家要求：死人不需要说话 |
+| 催促用 **Postfix 换气泡文本**，而不是重写游戏逻辑 | 气泡创建、`_endTurnPingDialogues` 替换、角色配色、1.5 秒时长都留给游戏，我们只换那句话；游戏以后改动画我们跟着受益 |
+| 语气阈值放 JSON（`_ping`），50% 比例写死 | 测试"更凶"不用真等 5 分钟（改成 10/20 秒即可）；50% 是玩家的硬要求，不值得做成可调项 |
 
 ---
 
@@ -454,10 +534,10 @@ girya_progress  ← 还没练满时的鼓励
 |---|---|
 | 火堆场景 | ✅ 已接：14 个条件（低血 / 蜡烛 / 壶铃 ×2 / 10 种遗物），优先级与概率见 §4 |
 | 五角色口吻考证 | ✅ 全部完成（§5.1，每条都附游戏原文实例） |
-| 台词量 | 89 句（`rest_site`）+ 17 句（`ping` 占位） |
+| 台词量 | 89 句（`rest_site`）+ 44 句（`ping`：五角色 × 正常/更急/更凶 + 通用池） |
 | mod 命名 | ✅ 已改名 **`MoreCharacterLines`**（显示名「更多角色台词」，版本 `0.1.0`）：工程目录、`mods\` 安装目录、AppData 数据目录、预检脚本全部同步；旧的 `mods\CharacterLines\` 与 `mods\RestSitePrompts\` 已删 |
 | 安装 | ✅ `游戏目录\mods\MoreCharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
-| ping 场景 | ⬜ **JSON 已占位、预检已验证可抽**；缺"找到游戏里设置催促文案的入口" |
+| ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
 | git | ✅ 干净（改名提交见 `git log -1`；改名前的历史停在 `095a9ef`） |
 
@@ -495,21 +575,28 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 
 ### 下一个任务（玩家指定顺序）
 
-> 改名（`MoreCharacterLines`）已经做完，可以直接从下面第 1 条开始。
+> 改名（`MoreCharacterLines`）和 ping 接入都已经做完。下一步见下。
 
-1. **ping 接入（P0）**：先用 ildump 找 `banter.alive.endTurnPing`（或 `endTurnPing`）在哪个类、
-   哪一行被写进 UI，然后照 `SceneRestSite.cs` 写 `ScenePing.cs`，调
-   `LineBank.Pick(Scenes.Ping, characterId, out used, conditions)`；
-   JSON 里 `ping` 六角色已就绪，第一句就是游戏原句。
-2. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`。
+1. **ping 多人联机实测**（需要两台机器 / 两个客户端）：
+   - 把 `游戏目录\mods\MoreCharacterLines\lines.json` 里的 `_ping.urgentAfterSeconds` /
+     `angryAfterSeconds` 临时改成 `10` / `20`，就不用真等 1 分钟 / 5 分钟；
+   - 验四件事：① 结束回合后按 Ping 有气泡且是 mod 台词；② 两台机器（都装了 mod）看到**同一句**；
+     ③ 只有一台装 mod 时，另一台显示游戏原话、联机正常；④ 死人按 Ping 时仍然只有 `……`；
+   - 日志里搜 `[MoreCharacterLines] 催促台词（档位 N）` 可以看到档位与抽中的句子。
+2. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`（流程见 §11）。
 3. 玩家说"还有很多要求"，先问清楚再动手。
 
 ### 踩过的坑（别再踩）
 
 - 游戏优先读 **mod 文件夹里的 `lines.json`**；改仓库里的那份必须重新 `build.ps1` 才生效。
+- **升级后要手动同步 `mods\<id>\lines.json`**：`build.ps1` 按设计**不覆盖**已存在的台词文件，
+  所以"新 DLL + 旧 lines.json"会表现为「功能在、但新池子读不到」（例如 ping 永远只说 normal 档）。
+  确认玩家没改过那份之后，把 `assets\MoreCharacterLines\lines.json` 拷过去覆盖。
 - 写角色台词前**先看 §5.1 的实例栏**：储君别说"本王/朕"、故障机器人别写流利长句、
   静默猎手别写开口台词、铁甲战士少用省略号。
 - `（）` 是我们的旁白约定（**原作没有旁白传统**，原作旁白用 `[i][font_size=22]…[/font_size][/i]`）。
+- ping 的**两端一致**靠"同步状态派生种子"，任何依赖本机时序的东西（计数器、随机数、本地时间）
+  都不能进种子 —— 一进就会两边不一样。
 - `.ps1` 必须 UTF-8 **with BOM**，丢了就跑 `fix-encoding.ps1`。
 - mod 三件套必须同名：`<id>.json` / `<id>.dll` / `<id>.pck`，且清单必须有 `"id"`。
 - 私用/反射目标改名时：日志会报错，mod 会保持原版文案，不会崩游戏。

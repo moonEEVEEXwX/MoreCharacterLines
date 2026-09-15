@@ -24,6 +24,12 @@ internal static class Conditions
     /// <summary>壶铃还没练满 —— 鼓励去锻炼。</summary>
     internal const string GiryaProgress = "girya_progress";
 
+    /// <summary>ping：已经等了有一会儿（默认 1 分钟）→ 催促语气更急。</summary>
+    internal const string WaitUrgent = "wait_urgent";
+
+    /// <summary>ping：等太久了（默认 5 分钟）→ 催促语气更凶。</summary>
+    internal const string WaitAngry = "wait_angry";
+
     internal const string Shovel = "relic_shovel";                  // 铲子（挖掘）
     internal const string Cleaver = "relic_cleaver";                // 切肉刀（烹饪）
     internal const string Tent = "relic_tent";                      // 微型帐篷（可多选）
@@ -187,5 +193,49 @@ internal static class RestSiteConditions
         }
 
         return _giryaMaxLifts.Value;
+    }
+}
+
+/// <summary>
+/// 多人催促（ping）的语气分档 —— 纯函数，预检可以直接喂数字测。
+///
+/// 规则（玩家定）：**≥50% 的玩家已经结束回合**、剩下的玩家还在继续打时开始计时；
+///   - 超过 <c>urgentAfterSeconds</c> 秒（默认 60）→ 更急（wait_urgent）
+///   - 超过 <c>angryAfterSeconds</c> 秒（默认 300）→ 更凶（wait_angry）
+///   - 下一回合（RoundNumber 变化）清零重来
+///
+/// 注意：档位是**两端各算各的**，算出来必然一样 —— 计时起点来自两端都收到的
+/// 同一个「结束回合」事件，秒数阈值判定只差几十毫秒（见 PingClock）。
+/// </summary>
+internal static class PingTone
+{
+    /// <summary>多少比例的玩家结束回合后开始计时（玩家要求是 50%，写死）。</summary>
+    internal const double HalfwayRatio = 0.5;
+
+    internal const int Normal = 0;
+    internal const int Urgent = 1;
+    internal const int Angry = 2;
+
+    /// <summary>算出当前语气档位：0 正常 / 1 更急 / 2 更凶。</summary>
+    internal static int Tier(int readyPlayers, int totalPlayers, double waitedSeconds,
+                             int urgentAfterSeconds, int angryAfterSeconds)
+    {
+        if (totalPlayers <= 0) return Normal;
+        if (readyPlayers <= 0) return Normal;
+        if (readyPlayers < totalPlayers * HalfwayRatio) return Normal;   // 还没到 50%，不催
+        if (waitedSeconds >= angryAfterSeconds) return Angry;
+        if (waitedSeconds >= urgentAfterSeconds) return Urgent;
+        return Normal;
+    }
+
+    /// <summary>档位 → 条件池（按优先级从高到低；正常档返回空数组 = 用平时池）。</summary>
+    internal static string[] Pools(int tier)
+    {
+        return tier switch
+        {
+            >= Angry => new[] { Conditions.WaitAngry, Conditions.WaitUrgent },
+            Urgent => new[] { Conditions.WaitUrgent },
+            _ => Array.Empty<string>(),
+        };
     }
 }

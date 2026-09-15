@@ -1,6 +1,8 @@
 # 更多角色台词 (MoreCharacterLines)
 
-按「角色 + 场景」给游戏里的固定文案配随机台词。目前接好的是**火堆**：
+按「角色 + 场景」给游戏里的固定文案配随机台词。目前接好了**两个场景**：
+
+**火堆（休息处）顶部那句提示语**：
 
 - 铁甲战士 → “稍作调整……继续杀戮……”“稍息……前进……”
 - 静默猎手 → “……稍作调整……”“……”
@@ -8,9 +10,15 @@
 - 没写专属台词的角色（包括 mod 角色）→ 只用该场景的 `DEFAULT` 通用池
 - 血量 **≤ 25%** 时优先说「伤得不轻」这类话 —— 复用游戏自己的低血判定
   （`CharacterModel.IsLowHealth`），和**低血边框动画是同一个临界点**
-- 台词文件可以就地编辑；加新场景（多人 ping 等）只需要改 JSON + 一个小补丁
 - 目前共 **14 个条件**（血量 / 南瓜蜡烛 / 壶铃 / 10 种火堆遗物），遗物拿得越多，
   越容易说出遗物相关的台词（占比 25% → 80%）
+
+**多人催促（ping）头顶气泡**（结束回合后按 Ping 按钮时说的那句）：
+
+- 台词按**等待时长**分三档：刚开始等 → 原版口吻；≥50% 的人已结束回合、其余人还在打，
+  等过 **1 分钟** → 更急；等过 **5 分钟** → 更凶（阈值可改，见 §3.1）
+- **两台装了 mod 的机器看到的是同一句**；**没装 mod 的玩家不受影响**（照旧显示游戏原话，联机正常）
+- 角色死亡时不接管，保持原版的「……」
 
 > 📐 **设计方针、概率规则、决策记录与待办计划**都在 [`DESIGN.md`](DESIGN.md)，
 > 改代码或加场景前先看一眼那份。
@@ -41,6 +49,7 @@
   // 全局设置
   "_defaultChance": 0.1,                            // 有专属台词的角色，抽到 DEFAULT 通用池的概率
   "_relicFlavor": { "perRelic": 0.25, "max": 0.8 }, // 遗物台词占比：每个火堆遗物 25%，上限 80%
+  "_ping": { "urgentAfterSeconds": 60, "angryAfterSeconds": 300 }, // 催促语气升级的等待秒数
 
   // ── 场景：火堆 ────────────────────────────────────────
   "rest_site": {
@@ -56,10 +65,18 @@
     }
   },
 
-  // ── 场景：多人催促（JSON 先占位，代码还没接）──────────
+  // ── 场景：多人催促（ping）────────────────────────────
   "ping": {
-    "IRONCLAD": ["快点。", "……在等什么？"],     // 只写数组 = 只有 normal 池
-    "DEFAULT":  ["……在吗？"]
+    "_conditionChance": { "wait_urgent": 1, "wait_angry": 1 },  // 满足条件就一定说
+    "IRONCLAD": {
+      "normal": ["快点。", "……在等什么。"],          // 只写数组 = 只有 normal 池
+      "wait_urgent": ["还没好吗。"],                  // ≥50% 人结束回合 + 等满 1 分钟
+      "wait_angry": ["你在磨蹭什么！"]                 // 等满 5 分钟
+    },
+    "DEFAULT": {
+      "normal": ["……在吗？"],
+      "wait_urgent": ["快一点吧。"]                    // 没写 wait_angry 就退回这一档
+    }
   }
 }
 ```
@@ -87,6 +104,7 @@
 | `_defaultChance` | 文件顶层 | 有专属台词的角色抽到通用池的概率（默认 `0.1`，`0` = 永远只说自己的） |
 | `_conditionChance` | 文件顶层（或场景内） | 状态类条件（`low_hp` / `candle_low` / `girya_*`）的概率（默认 `1`；示例里低血时 `0.8`，即 20% 还是说 normal） |
 | `_relicFlavor` | 文件顶层 | **遗物台词占比**：`perRelic` × 拥有的火堆遗物个数（上限 `max`）。默认 `0.25` / `0.8` → 1 个遗物 25%、2 个 50%、3 个 75%、4 个及以上 80%；`perRelic: 0` 等于关掉 |
+| `_ping` | 文件顶层 | **ping 语气升级的等待秒数**：`urgentAfterSeconds`（默认 60）/ `angryAfterSeconds`（默认 300）。测试时改成 10 / 20 就不用真等 5 分钟（见 §3.1） |
 
 ---
 
@@ -120,6 +138,8 @@ ID 就是游戏本地化里 `xxx.title` 的前缀（可参考 `_ref\loc_zhs`）�
 | `relic_humidifier` | 拥有石炉加湿器 | 遗物 `StoneHumidifier` |
 | `relic_tea_set` | 拥有古茶具套装 | 遗物 `VenerableTeaSet` |
 | `relic_fake_tea_set` | 拥有古茶具套装？？？ | 遗物 `FakeVenerableTeaSet`，**同时有真货时不出现** |
+| `wait_urgent` | ping：≥50% 玩家已结束回合、其余人还在打，且等超过 `_ping.urgentAfterSeconds`（默认 60 秒） | 回合号 + 游戏自己的「已结束回合」集合（见 §3.1） |
+| `wait_angry` | 同上，等超过 `_ping.angryAfterSeconds`（默认 300 秒） | 同上 |
 
 ### 火堆条件的优先级
 
@@ -150,7 +170,35 @@ girya_progress    ← 还没练满时的鼓励
 
 ---
 
-## 4. 加新场景（比如多人 ping）
+### 3.1 催促（ping）的语气分档
+
+结束回合后按 Ping 按钮，角色头顶会弹一句催促。**等待时间越长，语气越差**：
+
+| 档位 | 什么时候 | 池名 | 默认阈值 |
+|---|---|---|---|
+| 正常 | 刚结束回合 / 还没到 50% 的人结束回合 | `normal` | — |
+| 更急 | ≥50% 玩家已结束回合，其余人还在继续打 | `wait_urgent` | 60 秒 |
+| 更凶 | 同上，等得更久 | `wait_angry` | 300 秒 |
+
+```jsonc
+"_ping": {
+  "urgentAfterSeconds": 60,    // 想快点看到「更急」就改成 10
+  "angryAfterSeconds": 300     // 想快点看到「更凶」就改成 20
+}
+```
+
+- **测试提示**：把这两个数改小（改 `mods\MoreCharacterLines\lines.json`，改完即时生效），
+  两个人快速结束回合后互相 ping 就能看到三档台词，不用真等 5 分钟。
+- 计时从「已结束回合的人数达到 50%」开始，**下一回合自动清零**。
+- 只有满足条件才升级：没人结束回合、或只有 25% 的人结束回合时，等再久也是正常语气。
+- 优先级：`wait_angry` > `wait_urgent` > `normal`；某个池子没写就自动往下退。
+- **两个人都装了 mod 时看到的是同一句**：台词由「回合号 + 催促者 + 语气档位」算出来
+  （两端状态一致 ⇒ 结果一致），不需要联机同步，也不影响没装 mod 的玩家。
+- 死人不说话：死亡状态保持原版「……」。
+
+---
+
+## 4. 加新场景（照 `SceneRestSite.cs` / `ScenePing.cs` 写）
 
 两步：
 
@@ -240,7 +288,13 @@ git push -u origin main
 - `[MoreCharacterLines] loaded.` —— 加载成功
 - `[MoreCharacterLines] 已生成可编辑台词文件：...` —— 台词文件生成位置
 - `[MoreCharacterLines] 台词来源：...` —— 这次用的是哪一份
+- `[MoreCharacterLines] 催促台词（档位 N）：...` —— 触发了 ping 台词，N = 0 正常 / 1 更急 / 2 更凶
 - `[MoreCharacterLines] JSON 格式有误：...` —— 台词文件写错（会自动退回下一份）
+
+ping 不生效？按顺序查：① **`mods\MoreCharacterLines\lines.json` 是不是旧的**
+（`build.ps1` 不覆盖已存在的台词文件，新版本要手动同步那份）；
+② 是不是死人在催（死人保持原版）；③ 日志里有没有 `催促台词` 那行 —— 没有就是抽取没命中，
+检查 `ping` 场景里有没有该角色的池子（缺了会走 `DEFAULT`，`DEFAULT` 也没有就保持原版）。
 
 改完没生效？① 改的是优先级更低的那份；② 在火堆里改的（要出去再进来）；
 ③ JSON 语法错误（日志有提示）。
@@ -273,24 +327,43 @@ powershell -ExecutionPolicy Bypass -File fix-encoding.ps1
         - 悬停选项改的是 Description 标签，不会覆盖 Header
 ```
 
+```
+ping：NPingButton.OnRelease → FlavorSynchronizer.SendEndTurnPing()
+        → CreateEndTurnPingDialogueIfNecessary(player)   ← 自己这边 / 对端收到消息都走这里
+              LocString("characters", "<角色>.banter.<alive|dead>.endTurnPing")
+
+本 mod：Postfix 挂在后面，把气泡里那句话换掉
+        - 死人（Creature.IsDead）直接撒手 → 保持原版「……」
+        - 语气档位 = PingClock（挂在 SetReadyToEndTurn 后面计时，下一回合清零）
+        - 台词种子 = 回合号 + 催促者 NetId + 档位 → **两端抽出同一句**，不需要发网络消息
+        - 气泡标签是富文本，只换中间那句，保留游戏自己的 [center][fly_in …] 包装
+```
+
 文件分工：
 
 | 文件 | 作用 |
 |---|---|
-| `LineBank.cs` | 台词库：读 JSON、按场景/角色/条件抽；三处来源优先级 |
+| `LineBank.cs` | 台词库：读 JSON、按场景/角色/条件抽（含 ping 的确定性抽取）；三处来源优先级 |
 | `PlayerContext.cs` | 取当前玩家、角色 ID、低血判定、按 ID/类型找遗物 |
-| `Conditions.cs` | 条件名 + 火堆条件优先级（含各遗物判定） |
+| `Conditions.cs` | 条件名 + 火堆条件优先级（含各遗物判定）+ 催促语气分档纯函数 |
 | `OneShot.cs` | “只播一次”的记录，存 `%AppData%\SlayTheSpire2\MoreCharacterLines\state.json` |
-| `SceneRestSite.cs` | 火堆场景补丁（加场景照这个写） |
+| `SceneRestSite.cs` | 火堆场景补丁（加新场景照这个写） |
+| `ScenePing.cs` | 多人催促补丁：换气泡文案 |
+| `PingClock.cs` | 催促计时：≥50% 玩家结束回合后开始等，1 分钟 / 5 分钟分档 |
 | `MoreCharacterLinesBootstrap.cs` | 入口：`PatchAll` + 生成可编辑台词文件 |
 
 ---
 
 ## 9. 已知限制
 
-- **多人游戏**：取「本地玩家」的角色，所以两台机器看到的台词可能不同（纯外观，不影响联机判定）。
-  想统一取 1 号位玩家，把 `PlayerContext.FromRunState()` 里的 `LocalContext.GetMe(...)` 去掉。
+- **多人游戏里的台词同步**：
+  - **ping**：两台都装了 mod 时显示**同一句**（种子来自同步状态）；
+    只有一台装也不影响联机，没装的那台显示游戏原话。
+  - **火堆**：取「本地玩家」的角色，两台机器看到的可能不同（纯外观，不影响联机判定）。
+    想统一取 1 号位玩家，把 `PlayerContext.FromRunState()` 里的 `LocalContext.GetMe(...)` 去掉。
 - 只改火堆顶部提示语，不改休息 / 锻造选项的说明文字。
+- ping 的同一档位内重复催会说同一句（换回合 / 升档才换）—— 这是"两端一致"换来的，
+  详见 `DESIGN.md` §2。
 - 台词不随游戏语言切换（要多语言可把 JSON 改成 `{"zhs": {...}, "eng": {...}}`，
   再用 `LocManager.Instance.Language` 选一份）。
 - 游戏更新后若私有成员改名，反射会失败：日志报错，表现是**保持原版文案**，不会崩。
