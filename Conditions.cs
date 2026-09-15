@@ -7,7 +7,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace CharacterLines;
+namespace MoreCharacterLines;
 
 /// <summary>条件名 —— 必须和 lines.json 里角色下面写的池名一致。</summary>
 internal static class Conditions
@@ -111,7 +111,7 @@ internal static class RestSiteConditions
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 计算火堆条件失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 计算火堆条件失败：" + e.Message);
         }
 
         return conditions.ToArray();
@@ -166,7 +166,7 @@ internal static class RestSiteConditions
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 读取遗物列表失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 读取遗物列表失败：" + e.Message);
             return Array.Empty<Type>();
         }
     }

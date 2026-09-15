@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace CharacterLines;
+namespace MoreCharacterLines;
 
 /// <summary>
 /// 游戏侧上下文：取当前玩家、读遗物、判断血量等。
@@ -34,7 +34,7 @@ internal static class PlayerContext
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 取当前玩家失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 取当前玩家失败：" + e.Message);
             return null;
         }
     }
@@ -67,7 +67,7 @@ internal static class PlayerContext
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 读遗物失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 读遗物失败：" + e.Message);
         }
 
         return false;
@@ -88,7 +88,7 @@ internal static class PlayerContext
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 读遗物失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 读遗物失败：" + e.Message);
         }
 
         return null;
@@ -113,7 +113,7 @@ internal static class PlayerContext
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 低血判定失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 低血判定失败：" + e.Message);
             return false;
         }
     }

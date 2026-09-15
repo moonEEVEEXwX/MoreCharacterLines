@@ -1,15 +1,15 @@
 ﻿<#
-  CharacterLines 构建脚本（Windows）
+  MoreCharacterLines 构建脚本（Windows）
   用法：
       powershell -ExecutionPolicy Bypass -File build.ps1
       powershell -ExecutionPolicy Bypass -File build.ps1 -GameDir "X:\...\Slay the Spire 2"
       powershell -ExecutionPolicy Bypass -File build.ps1 -OutDir "D:\somewhere"     # 只编译，不装进游戏目录
 
   步骤：
-    1) 编译 CharacterLines.dll
+    1) 编译 MoreCharacterLines.dll
        （优先 dotnet build；如果机器上只有 .NET 8 SDK，则用 SDK 自带的 Roslyn csc + 游戏目录里的 .NET 9 运行时程序集直接编译）
-    2) 把 assets/ 和台词 JSON 打包成 CharacterLines.pck
-    3) 把 CharacterLines.dll / .pck / <id>.json / lines.json 复制到 游戏目录\mods\CharacterLines\
+    2) 把 assets/ 和台词 JSON 打包成 MoreCharacterLines.pck
+    3) 把 MoreCharacterLines.dll / .pck / <id>.json / lines.json 复制到 游戏目录\mods\MoreCharacterLines\
 #>
 param(
     [string]$GameDir = "",
@@ -18,7 +18,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$modId = "CharacterLines"
+$modId = "MoreCharacterLines"
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Write-Step([string]$text) { Write-Host ""; Write-Host "==> $text" -ForegroundColor Cyan }
@@ -215,7 +215,7 @@ if ($SkipInstall) {
     Write-Host "只构建未安装，产物在：$OutDir" -ForegroundColor Green
 } elseif ($installOk) {
     Write-Host "构建完成，已安装到：$OutDir" -ForegroundColor Green
-    Write-Host "改台词不用重新编译：编辑 $OutDir\lines.json（或 %AppData%\SlayTheSpire2\CharacterLines\lines.json），然后重进一次火堆。" -ForegroundColor Green
+    Write-Host "改台词不用重新编译：编辑 $OutDir\lines.json（或 %AppData%\SlayTheSpire2\MoreCharacterLines\lines.json），然后重进一次火堆。" -ForegroundColor Green
 } else {
     Write-Host "构建完成，产物在：$OutDir" -ForegroundColor Green
     Write-Host "请把该目录整体复制到 游戏目录\mods\ 下。" -ForegroundColor Yellow

@@ -4,19 +4,19 @@ using System.Text.Json;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
 
-namespace CharacterLines;
+namespace MoreCharacterLines;
 
 /// <summary>
 /// 一次性播报的记录（比如“壶铃练满”那句只播一次）。
 ///
-/// 存在 user://CharacterLines/state.json —— 即
-/// %AppData%\SlayTheSpire2\CharacterLines\state.json，
+/// 存在 user://MoreCharacterLines/state.json —— 即
+/// %AppData%\SlayTheSpire2\MoreCharacterLines\state.json，
 /// 所以读档、重启游戏之后也不会重复播报。
 /// </summary>
 internal static class OneShot
 {
-    private const string StateDirPath = "user://CharacterLines";
-    private const string StateFilePath = "user://CharacterLines/state.json";
+    private const string StateDirPath = "user://MoreCharacterLines";
+    private const string StateFilePath = "user://MoreCharacterLines/state.json";
 
     /// <summary>最多记多少条，防止文件无限增长。</summary>
     private const int MaxEntries = 200;
@@ -73,7 +73,7 @@ internal static class OneShot
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 读取一次性播报记录失败（当作空处理）：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 读取一次性播报记录失败（当作空处理）：" + e.Message);
         }
     }
 
@@ -87,7 +87,7 @@ internal static class OneShot
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 保存一次性播报记录失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 保存一次性播报记录失败：" + e.Message);
         }
     }
 }

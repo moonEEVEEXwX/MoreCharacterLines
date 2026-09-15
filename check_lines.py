@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a CharacterLines lines.json file.
+"""Validate a MoreCharacterLines lines.json file.
 
 Mirrors the mod's own tolerant parser:
   - UTF-8 with or without BOM

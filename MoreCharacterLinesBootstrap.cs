@@ -3,7 +3,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
 
-namespace CharacterLines;
+namespace MoreCharacterLines;
 
 /// <summary>
 /// Mod 入口。游戏启动时扫描所有已加载 DLL，找到带 [ModInitializer] 的类并调用指定静态方法。
@@ -23,6 +23,6 @@ public static class Bootstrap
         new Harmony("lbd.characterlines").PatchAll(Assembly.GetExecutingAssembly());
         LineBank.EnsureEditableFile();
 
-        Log.Info("[CharacterLines] loaded.");
+        Log.Info("[MoreCharacterLines] loaded.");
     }
 }

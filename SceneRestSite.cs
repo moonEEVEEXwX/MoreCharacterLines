@@ -7,7 +7,7 @@ using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace CharacterLines;
+namespace MoreCharacterLines;
 
 /// <summary>
 /// 火堆（休息处）场景。
@@ -57,7 +57,7 @@ internal static class SceneRestSite
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 设置火堆台词失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 设置火堆台词失败：" + e.Message);
         }
     }
 

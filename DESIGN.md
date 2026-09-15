@@ -1,4 +1,4 @@
-# CharacterLines 设计方针与计划
+# MoreCharacterLines（更多角色台词）设计方针与计划
 
 > 这份文档是这个 mod 的「单一事实来源」：定位、架构、台词规范、概率与优先级方针、
 > 工程约定、测试方式、待办计划、以及每条决定的理由。
@@ -39,14 +39,14 @@
 
 | 文件 | 职责 |
 |---|---|
-| `CharacterLinesBootstrap.cs` | 入口：`[ModInitializer]` → `PatchAll` + 生成可编辑台词文件 |
+| `MoreCharacterLinesBootstrap.cs` | 入口：`[ModInitializer]` → `PatchAll` + 生成可编辑台词文件 |
 | `SceneRestSite.cs` | 火堆场景补丁：挂在 `NRestSiteRoom._Ready` 后面改写 `Header` |
 | `Conditions.cs` | 条件名常量 + 火堆条件优先级 + 遗物判定（**纯函数** `FlavorConditions`） |
 | `PlayerContext.cs` | 游戏侧上下文：当前玩家、角色 ID、低血判定、按类型/ID 找遗物 |
 | `LineBank.cs` | 台词库：读三处 `lines.json`、解析、按场景/角色/条件抽取 |
-| `OneShot.cs` | "只播一次"记录（`%AppData%\SlayTheSpire2\CharacterLines\state.json`） |
-| `assets/CharacterLines/lines.json` | 出厂台词（打包进 PCK） |
-| `build.ps1` | 编译 + 打包 PCK + 安装到 `mods\CharacterLines\` |
+| `OneShot.cs` | "只播一次"记录（`%AppData%\SlayTheSpire2\MoreCharacterLines\state.json`） |
+| `assets/MoreCharacterLines/lines.json` | 出厂台词（打包进 PCK） |
+| `build.ps1` | 编译 + 打包 PCK + 安装到 `mods\MoreCharacterLines\` |
 | `fix-encoding.ps1` | 修复 `.ps1` 的 UTF-8 BOM（Windows PowerShell 5.1 必需） |
 
 ### 数据流
@@ -65,8 +65,8 @@
 ### 台词文件来源（优先级从高到低）
 
 1. `<mod 文件夹>\lines.json` —— 随包附带，**下载到 mod 的人可以直接就地改**
-2. `%AppData%\SlayTheSpire2\CharacterLines\lines.json` —— 个人配置（mod 文件夹不可写时）
-3. `res://CharacterLines/lines.json` —— PCK 里自带的出厂台词
+2. `%AppData%\SlayTheSpire2\MoreCharacterLines\lines.json` —— 个人配置（mod 文件夹不可写时）
+3. `res://MoreCharacterLines/lines.json` —— PCK 里自带的出厂台词
 4. 都没有 → 返回 null，保持原版文案
 
 > 缺哪一份就自动生成哪份；`build.ps1` **不会覆盖已存在的 `lines.json`**（只会在缺 BOM 时无损补 BOM）。
@@ -314,9 +314,10 @@ girya_progress  ← 还没练满时的鼓励
 | 遗物判定 | **用类型匹配**（`FindRelic<Shovel>`），不用 ID 字符串 —— 类名写错会在编译期报错，不会静默失效 |
 | 反射访问 | 私有成员用 `AccessTools`，拿不到就返回 null / 走兜底分支，不抛异常 |
 | mod 清单 | 必须 `<id>.json` + `<id>.dll` + `<id>.pck`，且清单里必须有 `"id"` 字段（游戏硬性要求） |
-| 日志前缀 | 一律 `[CharacterLines]`，方便过滤 |
+| mod 命名 | id / 程序集 / 根命名空间统一 `MoreCharacterLines`，显示名「更多角色台词」。改过两次名（`RestSitePrompts` → `CharacterLines` → `MoreCharacterLines`），**每次改名都必须删掉游戏里的旧目录**（见 §12 踩过的坑） |
+| 日志前缀 | 一律 `[MoreCharacterLines]`，方便过滤 |
 | `.ps1` 编码 | **UTF-8 with BOM**（否则 Windows PowerShell 5.1 按 GBK 解码会语法错误）；丢了就跑 `fix-encoding.ps1` |
-| 一次性状态 | 存 `%AppData%\SlayTheSpire2\CharacterLines\state.json`（按 `种子 + 角色` 作 key） |
+| 一次性状态 | 存 `%AppData%\SlayTheSpire2\MoreCharacterLines\state.json`（按 `种子 + 角色` 作 key） |
 | 绝对路径文件 | 用 `System.IO`（更快更稳）；`res://` / `user://` 用 Godot `FileAccess` |
 
 ---
@@ -397,16 +398,17 @@ girya_progress  ← 还没练满时的鼓励
 | `.ps1` 用 UTF-8 BOM | Windows PowerShell 5.1 按 ANSI/GBK 读取无 BOM 文件 → 中文注释破坏语法 |
 | 放弃 `working-tree-encoding=UTF-8-BOM` | Git for Windows 不支持该转换，`git add` 直接 fatal；改用 `fix-encoding.ps1` |
 | `build.ps1` 不覆盖 `lines.json` | 玩家就地改的台词不能被下次构建吞掉 |
+| 改名 `CharacterLines` → `MoreCharacterLines`，版本重置 `0.1.0` | 定位从"火堆那一句"扩成"**更多**角色台词"（下方 P0 要接 ping，后面还有事件 / 商店等）；改 id 是破坏性变更（旧目录必须删、AppData 数据目录跟着换），所以版本重新起算 |
 
 ---
 
 ## 10. 排障速查
 
-日志：`%AppData%\SlayTheSpire2\logs\godot<时间>.log`，搜 `CharacterLines`
+日志：`%AppData%\SlayTheSpire2\logs\godot<时间>.log`，搜 `MoreCharacterLines`
 
 | 现象 | 先查 |
 |---|---|
-| 完全没生效 | 日志有没有 `[CharacterLines] loaded.`；mod 三件套是否齐全 |
+| 完全没生效 | 日志有没有 `[MoreCharacterLines] loaded.`；mod 三件套是否齐全 |
 | 改了台词没变化 | 改的是不是优先级更低的那份（mod 文件夹 > %AppData% > PCK）；是不是在火堆里改的（要出去再进来） |
 | 台词退回原版 | 日志 `JSON 格式有误` / `读取失败` → 检查编码（UTF-8）与逗号引号；`台词来源` 看用的哪份 |
 | 某遗物台词不出现 | 预检该条件能否命中；是否被更高优先级顶掉（`candle_low` > `girya_maxed` > `low_hp`） |
@@ -453,18 +455,19 @@ girya_progress  ← 还没练满时的鼓励
 | 火堆场景 | ✅ 已接：14 个条件（低血 / 蜡烛 / 壶铃 ×2 / 10 种遗物），优先级与概率见 §4 |
 | 五角色口吻考证 | ✅ 全部完成（§5.1，每条都附游戏原文实例） |
 | 台词量 | 89 句（`rest_site`）+ 17 句（`ping` 占位） |
-| 安装 | ✅ `游戏目录\mods\CharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
+| mod 命名 | ✅ 已改名 **`MoreCharacterLines`**（显示名「更多角色台词」，版本 `0.1.0`）：工程目录、`mods\` 安装目录、AppData 数据目录、预检脚本全部同步；旧的 `mods\CharacterLines\` 与 `mods\RestSitePrompts\` 已删 |
+| 安装 | ✅ `游戏目录\mods\MoreCharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
 | ping 场景 | ⬜ **JSON 已占位、预检已验证可抽**；缺"找到游戏里设置催促文案的入口" |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
-| git | ✅ 干净（最新 `f3f6dc9`） |
+| git | ✅ 干净（改名提交见 `git log -1`；改名前的历史停在 `095a9ef`） |
 
 ### 关键路径
 
 | 东西 | 位置 |
 |---|---|
-| 工程 | `D:\sts2modtest\CharacterLines\` |
-| 台词（源码，会被打包进 PCK） | `assets\CharacterLines\lines.json` |
-| 台词（游戏里可就地改的那份） | `游戏目录\mods\CharacterLines\lines.json` |
+| 工程 | `D:\sts2modtest\MoreCharacterLines\` |
+| 台词（源码，会被打包进 PCK） | `assets\MoreCharacterLines\lines.json` |
+| 台词（游戏里可就地改的那份） | `游戏目录\mods\MoreCharacterLines\lines.json` |
 | 构建 / 语法闸门 | `build.ps1` + `check_lines.py`（`fix-encoding.ps1` 修 BOM） |
 | 预检 | `D:\sts2modtest\_tools\preflight\bin\Preflight.dll` |
 | IL 阅读器（查游戏逻辑） | `D:\sts2modtest\_tools\ildump\ildump\bin\Release\net8.0\ildump.exe` |
@@ -475,14 +478,14 @@ girya_progress  ← 还没练满时的鼓励
 
 ```powershell
 # 构建 + 安装（改完 assets 里的台词必须跑这个）
-cd D:\sts2modtest\CharacterLines; powershell -ExecutionPolicy Bypass -File build.ps1
+cd D:\sts2modtest\MoreCharacterLines; powershell -ExecutionPolicy Bypass -File build.ps1
 
 # 只校验台词文件（少逗号会报行号）
-python check_lines.py assets\CharacterLines\lines.json
+python check_lines.py assets\MoreCharacterLines\lines.json
 
 # 预检：加载真实 sts2.dll + 已安装的 mod DLL
 cd D:\sts2modtest\_tools\preflight\bin
-dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\CharacterLines\CharacterLines.dll"
+dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreCharacterLines\MoreCharacterLines.dll"
 
 # 查游戏某方法的逻辑 / 找某个字符串在哪里被用
 ildump.exe "<游戏>\data_sts2_windows_x86_64\sts2.dll" dump "<类型子串>" "<方法子串>"
@@ -491,6 +494,8 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 ```
 
 ### 下一个任务（玩家指定顺序）
+
+> 改名（`MoreCharacterLines`）已经做完，可以直接从下面第 1 条开始。
 
 1. **ping 接入（P0）**：先用 ildump 找 `banter.alive.endTurnPing`（或 `endTurnPing`）在哪个类、
    哪一行被写进 UI，然后照 `SceneRestSite.cs` 写 `ScenePing.cs`，调
@@ -508,3 +513,8 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 - `.ps1` 必须 UTF-8 **with BOM**，丢了就跑 `fix-encoding.ps1`。
 - mod 三件套必须同名：`<id>.json` / `<id>.dll` / `<id>.pck`，且清单必须有 `"id"`。
 - 私用/反射目标改名时：日志会报错，mod 会保持原版文案，不会崩游戏。
+- **改 mod id（改名）时必须同步这些地方**，漏一处就静默失效或双份加载：
+  `mod_manifest.json` 的 `id` + `pck_name`、`build.ps1` 的 `$modId`、`LineBank.cs` 的
+  `res://<id>/lines.json` 与 `user://<id>`、`OneShot.cs` 的 `user://<id>`、
+  命名空间 / 程序集名 / 日志前缀、`assets\<id>\` 目录，以及仓库外的 `_tools\preflight\Preflight.cs`。
+  **游戏里旧 id 的 mod 目录一定要删** —— 留着会同时加载两个 DLL，同一处文案被补丁挂两次。

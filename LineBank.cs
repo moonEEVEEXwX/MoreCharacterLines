@@ -5,7 +5,7 @@ using System.Text.Json;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
 
-namespace CharacterLines;
+namespace MoreCharacterLines;
 
 /// <summary>场景 ID。加新场景时在这里补一个常量，再写一个对应的补丁文件。</summary>
 internal static class Scenes
@@ -68,8 +68,8 @@ internal sealed class LineFile
 ///
 /// 台词文件来源（按顺序，先命中先用）：
 ///   1. &lt;mod 文件夹&gt;\lines.json            —— 和 dll/pck 放一起，下载到 mod 的人可以直接就地改
-///   2. user://CharacterLines/lines.json     —— %AppData%/SlayTheSpire2/CharacterLines/lines.json
-///   3. res://CharacterLines/lines.json      —— mod 的 PCK 里自带的那份
+///   2. user://MoreCharacterLines/lines.json     —— %AppData%/SlayTheSpire2/MoreCharacterLines/lines.json
+///   3. res://MoreCharacterLines/lines.json      —— mod 的 PCK 里自带的那份
 ///   4. 都没有就返回 null（调用方保持游戏原样）
 ///
 /// JSON 结构（条件直接挂在角色下面）：
@@ -114,9 +114,9 @@ internal static class LineBank
     private static readonly string[] DefaultKeys = { "DEFAULT", "default", "通用", "默认" };
     private static readonly string[] NormalAliases = { "normal", "default", "正常", "平时" };
 
-    private const string BuiltInPath = "res://CharacterLines/lines.json";
-    private const string UserDirPath = "user://CharacterLines";
-    private const string UserFilePath = "user://CharacterLines/lines.json";
+    private const string BuiltInPath = "res://MoreCharacterLines/lines.json";
+    private const string UserDirPath = "user://MoreCharacterLines";
+    private const string UserFilePath = "user://MoreCharacterLines/lines.json";
     private const string EditableFileName = "lines.json";
 
     private static bool _loggedSource;
@@ -278,7 +278,7 @@ internal static class LineBank
 
             if (modFolderFile is not null && TryWriteText(modFolderFile, builtIn))
             {
-                Log.Info("[CharacterLines] 已生成可编辑台词文件：" + modFolderFile);
+                Log.Info("[MoreCharacterLines] 已生成可编辑台词文件：" + modFolderFile);
                 return;
             }
 
@@ -293,12 +293,12 @@ internal static class LineBank
 
             if (TryWriteText(UserFilePath, builtIn))
             {
-                Log.Info("[CharacterLines] 已生成可编辑台词文件：" + ProjectSettings.GlobalizePath(UserFilePath));
+                Log.Info("[MoreCharacterLines] 已生成可编辑台词文件：" + ProjectSettings.GlobalizePath(UserFilePath));
             }
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 生成台词文件失败：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 生成台词文件失败：" + e.Message);
         }
     }
 
@@ -343,7 +343,7 @@ internal static class LineBank
                 return parsed;
             }
 
-            Log.Warn("[CharacterLines] 台词文件解析失败，尝试下一份：" + path);
+            Log.Warn("[MoreCharacterLines] 台词文件解析失败，尝试下一份：" + path);
         }
 
         return null;
@@ -392,7 +392,7 @@ internal static class LineBank
         }
         catch (Exception e)
         {
-            Log.Warn("[CharacterLines] 读取失败 " + path + "：" + e.Message);
+            Log.Warn("[MoreCharacterLines] 读取失败 " + path + "：" + e.Message);
             return null;
         }
     }
@@ -476,7 +476,7 @@ internal static class LineBank
         }
         catch (JsonException e)
         {
-            Log.Warn("[CharacterLines] JSON 格式有误：" + e.Message);
+            Log.Warn("[MoreCharacterLines] JSON 格式有误：" + e.Message);
             return null;
         }
     }
@@ -638,6 +638,6 @@ internal static class LineBank
     {
         if (_loggedSource) return;
         _loggedSource = true;
-        Log.Info("[CharacterLines] 台词来源：" + source);
+        Log.Info("[MoreCharacterLines] 台词来源：" + source);
     }
 }

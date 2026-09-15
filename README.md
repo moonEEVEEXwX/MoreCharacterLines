@@ -1,4 +1,4 @@
-# 角色台词库 (CharacterLines)
+# 更多角色台词 (MoreCharacterLines)
 
 按「角色 + 场景」给游戏里的固定文案配随机台词。目前接好的是**火堆**：
 
@@ -24,12 +24,12 @@
 
 | 顺序 | 文件 | 谁改的 | 什么时候用 |
 |---|---|---|---|
-| 1 | `游戏目录\mods\CharacterLines\lines.json` | 想临时定制这个 mod 的人 | **默认就是它**（打包时一起放进去的） |
-| 2 | `%AppData%\SlayTheSpire2\CharacterLines\lines.json` | 自己机器上的个人配置 | 上一条不存在时（例如 mod 文件夹不可写） |
-| 3 | `CharacterLines.pck` 里自带的默认台词 | mod 作者（你） | 前两条都不存在时 |
+| 1 | `游戏目录\mods\MoreCharacterLines\lines.json` | 想临时定制这个 mod 的人 | **默认就是它**（打包时一起放进去的） |
+| 2 | `%AppData%\SlayTheSpire2\MoreCharacterLines\lines.json` | 自己机器上的个人配置 | 上一条不存在时（例如 mod 文件夹不可写） |
+| 3 | `MoreCharacterLines.pck` 里自带的默认台词 | mod 作者（你） | 前两条都不存在时 |
 | 4 | 游戏原版文案 | 官方 | 全都没有时 |
 
-> 具体这次用的是哪一份，游戏日志里会写 `[CharacterLines] 台词来源：...`。
+> 具体这次用的是哪一份，游戏日志里会写 `[MoreCharacterLines] 台词来源：...`。
 > 改完 `lines.json`，**重进一次火堆**就生效（不用重新编译、不用重启游戏）。
 
 ---
@@ -108,7 +108,7 @@ ID 就是游戏本地化里 `xxx.title` 的前缀（可参考 `_ref\loc_zhs`）�
 |---|---|---|
 | `low_hp` | 血量 ≤ 25% | 游戏自己的 `CharacterModel.IsLowHealth`（与低血边框动画同源），拿不到时退回公开的 `GetHpPercentRemaining() <= 0.25` |
 | `candle_low` | 南瓜蜡烛剩余层数 ≤ 2 | `PumpkinCandle.KindleCount` |
-| `girya_maxed` | 壶铃已练满（`TimesLifted >= maxLifts`） | `Girya.TimesLifted` / `Girya.maxLifts`，**只播一次**（记录在 `%AppData%\SlayTheSpire2\CharacterLines\state.json`） |
+| `girya_maxed` | 壶铃已练满（`TimesLifted >= maxLifts`） | `Girya.TimesLifted` / `Girya.maxLifts`，**只播一次**（记录在 `%AppData%\SlayTheSpire2\MoreCharacterLines\state.json`） |
 | `girya_progress` | 壶铃还没练满 | 同上 |
 | `relic_shovel` | 拥有铲子 | 遗物 `Shovel` |
 | `relic_cleaver` | 拥有切肉刀 | 遗物 `MeatCleaver` |
@@ -189,19 +189,19 @@ girya_progress    ← 还没练满时的鼓励
 ## 5. 编译 & 安装
 
 ```powershell
-cd D:\sts2modtest\CharacterLines
+cd D:\sts2modtest\MoreCharacterLines
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 脚本会：
 
-1. 编译 `CharacterLines.dll`
+1. 编译 `MoreCharacterLines.dll`
    - 有 **.NET 9+ SDK** → 标准 `dotnet build`；
    - 只有 .NET 8 SDK（本机当前情况）→ 自动改用 SDK 自带 Roslyn `csc`，
      引用游戏目录 `data_sts2_windows_x86_64\` 里自带的 .NET 9 运行时程序集编译。
-2. 把 `assets/` 打包成 `CharacterLines.pck`。
-3. 安装到 `游戏目录\mods\CharacterLines\`：
-   `CharacterLines.dll` + `.pck` + `CharacterLines.json`（清单）+ `lines.json`（已存在则不覆盖）+ `README.md` / `THIRD_PARTY.md`。
+2. 把 `assets/` 打包成 `MoreCharacterLines.pck`。
+3. 安装到 `游戏目录\mods\MoreCharacterLines\`：
+   `MoreCharacterLines.dll` + `.pck` + `MoreCharacterLines.json`（清单）+ `lines.json`（已存在则不覆盖）+ `README.md` / `THIRD_PARTY.md`。
 
 参数：`-GameDir "X:\...\Slay the Spire 2"` / `-OutDir "D:\out"` / `-SkipInstall`。
 自动探测不到游戏时，在本目录建 `game_dir.txt` 写游戏路径。
@@ -215,7 +215,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ## 6. git
 
 ```powershell
-cd D:\sts2modtest\CharacterLines
+cd D:\sts2modtest\MoreCharacterLines
 git status
 git add -A
 git commit -m "加了低血台词"
@@ -235,12 +235,12 @@ git push -u origin main
 
 ## 7. 调试
 
-日志：`%AppData%\SlayTheSpire2\logs\godot<时间>.log`，搜 `CharacterLines`：
+日志：`%AppData%\SlayTheSpire2\logs\godot<时间>.log`，搜 `MoreCharacterLines`：
 
-- `[CharacterLines] loaded.` —— 加载成功
-- `[CharacterLines] 已生成可编辑台词文件：...` —— 台词文件生成位置
-- `[CharacterLines] 台词来源：...` —— 这次用的是哪一份
-- `[CharacterLines] JSON 格式有误：...` —— 台词文件写错（会自动退回下一份）
+- `[MoreCharacterLines] loaded.` —— 加载成功
+- `[MoreCharacterLines] 已生成可编辑台词文件：...` —— 台词文件生成位置
+- `[MoreCharacterLines] 台词来源：...` —— 这次用的是哪一份
+- `[MoreCharacterLines] JSON 格式有误：...` —— 台词文件写错（会自动退回下一份）
 
 改完没生效？① 改的是优先级更低的那份；② 在火堆里改的（要出去再进来）；
 ③ JSON 语法错误（日志有提示）。
@@ -280,9 +280,9 @@ powershell -ExecutionPolicy Bypass -File fix-encoding.ps1
 | `LineBank.cs` | 台词库：读 JSON、按场景/角色/条件抽；三处来源优先级 |
 | `PlayerContext.cs` | 取当前玩家、角色 ID、低血判定、按 ID/类型找遗物 |
 | `Conditions.cs` | 条件名 + 火堆条件优先级（含各遗物判定） |
-| `OneShot.cs` | “只播一次”的记录，存 `%AppData%\SlayTheSpire2\CharacterLines\state.json` |
+| `OneShot.cs` | “只播一次”的记录，存 `%AppData%\SlayTheSpire2\MoreCharacterLines\state.json` |
 | `SceneRestSite.cs` | 火堆场景补丁（加场景照这个写） |
-| `CharacterLinesBootstrap.cs` | 入口：`PatchAll` + 生成可编辑台词文件 |
+| `MoreCharacterLinesBootstrap.cs` | 入口：`PatchAll` + 生成可编辑台词文件 |
 
 ---
 
@@ -294,5 +294,6 @@ powershell -ExecutionPolicy Bypass -File fix-encoding.ps1
 - 台词不随游戏语言切换（要多语言可把 JSON 改成 `{"zhs": {...}, "eng": {...}}`，
   再用 `LocManager.Instance.Language` 选一份）。
 - 游戏更新后若私有成员改名，反射会失败：日志报错，表现是**保持原版文案**，不会崩。
-- mod id 从 `RestSitePrompts` 改成了 `CharacterLines`，所以旧目录 `mods\RestSitePrompts\` 要删掉
-  （两个都会改火堆文案，留两个会互相覆盖）。
+- mod 改过两次名：`RestSitePrompts` → `CharacterLines` → **`MoreCharacterLines`**（现在这个名字）。
+  旧目录 `mods\RestSitePrompts\`、`mods\CharacterLines\` 都要删掉 —— 它们和本 mod 改的是同一处文案，
+  留两个会互相覆盖，而且旧的 DLL 还会多挂一次补丁。
