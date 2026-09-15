@@ -439,3 +439,72 @@ girya_progress  ← 还没练满时的鼓励
 
 3. 在 `LineBank.Scenes` 补常量、在 `Conditions.cs` 补条件判定（能抽成纯函数就抽）
 4. 预检加两条：该场景能抽到台词、条件不污染其他场景
+
+---
+
+## 12. 交接备忘（给下一个对话 / 下一个我）
+
+> 新开对话时**先读本节**，就能接手；细节再看 §3–§7 与 §11。
+
+### 现在的状态
+
+| | 状态 |
+|---|---|
+| 火堆场景 | ✅ 已接：14 个条件（低血 / 蜡烛 / 壶铃 ×2 / 10 种遗物），优先级与概率见 §4 |
+| 五角色口吻考证 | ✅ 全部完成（§5.1，每条都附游戏原文实例） |
+| 台词量 | 89 句（`rest_site`）+ 17 句（`ping` 占位） |
+| 安装 | ✅ `游戏目录\mods\CharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
+| ping 场景 | ⬜ **JSON 已占位、预检已验证可抽**；缺"找到游戏里设置催促文案的入口" |
+| 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
+| git | ✅ 干净（最新 `f3f6dc9`） |
+
+### 关键路径
+
+| 东西 | 位置 |
+|---|---|
+| 工程 | `D:\sts2modtest\CharacterLines\` |
+| 台词（源码，会被打包进 PCK） | `assets\CharacterLines\lines.json` |
+| 台词（游戏里可就地改的那份） | `游戏目录\mods\CharacterLines\lines.json` |
+| 构建 / 语法闸门 | `build.ps1` + `check_lines.py`（`fix-encoding.ps1` 修 BOM） |
+| 预检 | `D:\sts2modtest\_tools\preflight\bin\Preflight.dll` |
+| IL 阅读器（查游戏逻辑） | `D:\sts2modtest\_tools\ildump\ildump\bin\Release\net8.0\ildump.exe` |
+| PCK 工具（list / cat / extract） | `D:\sts2modtest\_tools\pck_tool.py` |
+| 游戏本地化导出（考证口吻用） | `D:\sts2modtest\_ref\loc_zhs`、`_ref\loc_eng` |
+
+### 常用命令
+
+```powershell
+# 构建 + 安装（改完 assets 里的台词必须跑这个）
+cd D:\sts2modtest\CharacterLines; powershell -ExecutionPolicy Bypass -File build.ps1
+
+# 只校验台词文件（少逗号会报行号）
+python check_lines.py assets\CharacterLines\lines.json
+
+# 预检：加载真实 sts2.dll + 已安装的 mod DLL
+cd D:\sts2modtest\_tools\preflight\bin
+dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\CharacterLines\CharacterLines.dll"
+
+# 查游戏某方法的逻辑 / 找某个字符串在哪里被用
+ildump.exe "<游戏>\data_sts2_windows_x86_64\sts2.dll" dump "<类型子串>" "<方法子串>"
+ildump.exe "<...>\sts2.dll" findstr "\"要搜的字符串\""
+ildump.exe "<...>\sts2.dll" findcall "方法名"
+```
+
+### 下一个任务（玩家指定顺序）
+
+1. **ping 接入（P0）**：先用 ildump 找 `banter.alive.endTurnPing`（或 `endTurnPing`）在哪个类、
+   哪一行被写进 UI，然后照 `SceneRestSite.cs` 写 `ScenePing.cs`，调
+   `LineBank.Pick(Scenes.Ping, characterId, out used, conditions)`；
+   JSON 里 `ping` 六角色已就绪，第一句就是游戏原句。
+2. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`。
+3. 玩家说"还有很多要求"，先问清楚再动手。
+
+### 踩过的坑（别再踩）
+
+- 游戏优先读 **mod 文件夹里的 `lines.json`**；改仓库里的那份必须重新 `build.ps1` 才生效。
+- 写角色台词前**先看 §5.1 的实例栏**：储君别说"本王/朕"、故障机器人别写流利长句、
+  静默猎手别写开口台词、铁甲战士少用省略号。
+- `（）` 是我们的旁白约定（**原作没有旁白传统**，原作旁白用 `[i][font_size=22]…[/font_size][/i]`）。
+- `.ps1` 必须 UTF-8 **with BOM**，丢了就跑 `fix-encoding.ps1`。
+- mod 三件套必须同名：`<id>.json` / `<id>.dll` / `<id>.pck`，且清单必须有 `"id"`。
+- 私用/反射目标改名时：日志会报错，mod 会保持原版文案，不会崩游戏。
