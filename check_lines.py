@@ -37,6 +37,12 @@ KNOWN_BBCODE = {
     "center", "left", "right", "fill", "indent", "i", "b", "u", "s", "code", "p", "br", "hr",
     "font", "font_size", "color", "fgcolor", "bgcolor", "outline_size", "outline_color",
     "table", "cell", "list", "ol", "ul", "img", "url", "hint", "tooltip", "lang", "kbd",
+    # 具名颜色简写：游戏文本里到处都是（[red] / [gold] / [blue] / [purple] …），
+    # 气泡是同一个 RichTextLabel 家族，所以照样能用
+    "black", "white", "red", "green", "blue", "yellow", "cyan", "magenta", "gray", "grey",
+    "orange", "purple", "pink", "lime", "brown", "olive", "navy", "teal", "maroon", "aqua",
+    "fuchsia", "silver", "gold", "darkred", "darkgreen", "darkblue", "darkgray", "darkgrey",
+    "lightblue", "lightgreen", "lightgray", "lightgrey", "transparent",
 }
 
 TAG_RE = re.compile(r"\[/?(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)(?:[ =][^\]]*)?\]")
