@@ -42,6 +42,7 @@
 | `MoreCharacterLinesBootstrap.cs` | 入口：`[ModInitializer]` → `PatchAll` + 生成可编辑台词文件 |
 | `SceneRestSite.cs` | 火堆场景补丁：挂在 `NRestSiteRoom._Ready` 后面改写 `Header` |
 | `ScenePing.cs` | 多人催促补丁：挂在 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary` 后面换掉气泡文本 |
+| ~~`PingPreview.cs`~~ | ⚠️ **施工中（已临时撤掉）**：调试预览（战斗中按键弹催促使气泡）。挂点 `NCombatUi._Input` 没有 IL 体、Harmony 打不上，会让整个 `PatchAll` 失败 → 必须先换一个能挂的挂点再做 |
 | `PingClock.cs` | 催促计时：≥50% 玩家结束回合后开始等，1 分钟 / 5 分钟分档（挂在 `SetReadyToEndTurn` / `UndoReadyToEndTurn` 后面） |
 | `Conditions.cs` | 条件名常量 + 火堆条件优先级 + 遗物判定 + 催促语气分档（**纯函数** `FlavorConditions` / `PingTone`） |
 | `PlayerContext.cs` | 游戏侧上下文：当前玩家、角色 ID、低血判定、按类型/ID 找遗物 |
@@ -438,6 +439,11 @@ girya_progress  ← 还没练满时的鼓励
 - 遗物类型 → 条件映射：含**真假茶具互斥**的三种组合
 - JSON 解析：新写法（条件挂角色下）与旧写法（`_conditions` 大栏）都认
 
+**看观感**（预检验不了的，⚠️ 施工中）：改 ping 台词时把 `lines.json` 的
+`_debug.pingPreviewKey` 设成 `"F8"`（默认关），进战斗按它 —— 本地角色头顶会弹出
+当前档位的气泡，连按循环 **正常 → 更急 → 更凶**，颜色/晃动/发抖当场对齐，
+不用等多人局。看完记得改回 `""`。
+
 **改动 → 必测对照表**
 
 | 改了什么 | 必须确认 |
@@ -515,6 +521,7 @@ girya_progress  ← 还没练满时的鼓励
 | 语气阈值放 JSON（`_ping`），50% 比例写死 | 测试"更凶"不用真等 5 分钟（改成 10/20 秒即可）；50% 是玩家的硬要求，不值得做成可调项 |
 | ping 台词**禁止 `（）` 旁白**，情绪改用 BBCode（`[wave]` / `[shake]`） | 气泡代表**角色说出口的话**，写括号等于让角色旁白自己；火堆那套「（）= 旁白」是内心独白专用的体例。静默猎手三档都是「……」时，效果是唯一能表达情绪的手段 |
 | `check_lines.py` 加语义闸门（ping 括号 = 构建失败；未知 BBCode = 警告） | 语法检查拦不住"写法错"——括号和写错的效果名都会**静默地**显示成奇怪内容，让脚本先拦住 |
+| 加**调试预览键**（`_debug.pingPreviewKey`，默认关）——⚠️ **施工中，挂点没选对、已临时撤掉** | ping 气泡只在多人局出现，而多人环境各有各的坑（CouchCoop 浏览器端过不了涅奥、假联机里按钮不出现、局域网直连要关 RitsuLib）——**写台词不该被联机流程卡住**。预览走和原版一样的气泡路径，纯本地外观、不发消息、别人看不见 |
 
 ---
 

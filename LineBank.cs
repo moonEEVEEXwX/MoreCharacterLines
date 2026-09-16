@@ -66,6 +66,9 @@ internal sealed class LineFile
     /// <summary>催促语气变「更凶」的等待秒数（_ping.angryAfterSeconds）。</summary>
     internal int PingAngryAfterSeconds = LineBank.PingAngryAfterSecondsFallback;
 
+    /// <summary>调试预览键（_debug.pingPreviewKey）：空 = 关闭。见 PingPreview.cs。</summary>
+    internal string PingPreviewKey = string.Empty;
+
     internal readonly Dictionary<string, LineScene> Scenes = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -238,6 +241,12 @@ internal static class LineBank
         return new PingTiming(
             file?.PingUrgentAfterSeconds ?? PingUrgentAfterSecondsFallback,
             file?.PingAngryAfterSeconds ?? PingAngryAfterSecondsFallback);
+    }
+
+    /// <summary>调试预览键（`_debug.pingPreviewKey`）；空串 = 关闭。见 PingPreview.cs。</summary>
+    internal static string GetPingPreviewKey()
+    {
+        return LoadFirstAvailable()?.PingPreviewKey ?? string.Empty;
     }
 
     /// <summary>
@@ -524,6 +533,12 @@ internal static class LineBank
                     continue;
                 }
 
+                if (string.Equals(key, "_debug", StringComparison.OrdinalIgnoreCase))
+                {
+                    ParseDebug(property.Value, file);
+                    continue;
+                }
+
                 if (key.StartsWith("_", StringComparison.Ordinal)) continue;
                 if (property.Value.ValueKind != JsonValueKind.Object) continue;
 
@@ -669,6 +684,21 @@ internal static class LineBank
             {
                 file.PingAngryAfterSeconds = seconds;
             }
+        }
+    }
+
+    /// <summary>解析 _debug: { pingPreviewKey } —— 调试预览键（空 = 关闭）。</summary>
+    private static void ParseDebug(JsonElement element, LineFile file)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return;
+
+        foreach (JsonProperty property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, "pingPreviewKey", StringComparison.OrdinalIgnoreCase)) continue;
+
+            file.PingPreviewKey = property.Value.ValueKind == JsonValueKind.String
+                ? (property.Value.GetString() ?? string.Empty).Trim()
+                : string.Empty;
         }
     }
 
