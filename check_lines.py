@@ -12,7 +12,9 @@ Besides syntax it also enforces two content rules that are easy to get wrong:
 
   1. ping（多人催促）气泡 = 角色**说出口的话** —— 里面不许出现旁白括号（）；
      火堆那套「（）= 旁白」只适用于内心独白（rest_site）。
-  2. BBCode 标签只在 ping 气泡里有效（气泡是 MegaRichTextLabel）；
+  2. ping 是**对着队伍**说的：多人局是 2~4 人，所以别用单指称呼「你」
+     （「你们」可以）。写成警告而不是错误，因为这条比较像口味。
+  3. BBCode 标签只在 ping 气泡里有效（气泡是 MegaRichTextLabel）；
      火堆顶栏是 MegaLabel，写了 BBCode 会**原样显示**。
 
 Usage:  python check_lines.py <path-to-lines.json>
@@ -26,6 +28,10 @@ from pathlib import Path
 
 #: 旁白括号：ping 里出现就是错的（火堆里是合法写法）
 NARRATION_PARENS = "（）"
+
+#: 单指称呼「你」：多人局是 2~4 人（还有去掉人数上限的 mod），催促使不该只对着一个人说。
+#: 「你们」是复数、没问题；「你好」是打招呼，也放过。
+SINGULAR_YOU_RE = re.compile(r"你(?!们|好)")
 
 #: 允许出现在 ping 气泡里的 BBCode 标签。
 #: 来源：游戏自己用过的（sine / jitter / shake / rainbow）+ Godot 4 RichTextLabel 内置效果
@@ -134,6 +140,13 @@ def main() -> int:
                             problems.append(
                                 f"ping/{character}/{pool_name}: 出现旁白括号「{hit}」——"
                                 f"气泡是角色说出口的话，旁白括号只用于火堆内心独白：{text}"
+                            )
+
+                        # 1.5) 多人局是 2~4 人（还有去上限的 mod），别用单指称呼「你」
+                        if SINGULAR_YOU_RE.search(text):
+                            warnings.append(
+                                f"ping/{character}/{pool_name}: 出现单指称呼「你」——"
+                                f"多人局是 2~4 人，改成不点名的说法（或「你们」）：{text}"
                             )
 
                     # 2) BBCode 只在 ping 气泡里生效
