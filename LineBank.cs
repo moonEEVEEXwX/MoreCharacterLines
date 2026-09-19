@@ -66,6 +66,9 @@ internal sealed class LineFile
     /// <summary>催促语气变「更凶」的等待秒数（_ping.angryAfterSeconds）。</summary>
     internal int PingAngryAfterSeconds = LineBank.PingAngryAfterSecondsFallback;
 
+    /// <summary>每次按 ping 都换一句（_ping.perPingVariety，默认 true）。</summary>
+    internal bool PingPerPingVariety = LineBank.PingPerPingVarietyFallback;
+
     /// <summary>调试预览键（_debug.pingPreviewKey）：空 = 关闭。见 PingPreview.cs。</summary>
     internal string PingPreviewKey = string.Empty;
 
@@ -139,6 +142,9 @@ internal static class LineBank
 
     /// <summary>催促语变「更凶」的默认等待秒数（5 分钟）。</summary>
     internal const int PingAngryAfterSecondsFallback = 300;
+
+    /// <summary>默认「每次 ping 换一句」（_ping.perPingVariety 可关掉）。</summary>
+    internal const bool PingPerPingVarietyFallback = true;
 
     private static readonly string[] DefaultKeys = { "DEFAULT", "default", "通用", "默认" };
     private static readonly string[] NormalAliases = { "normal", "default", "正常", "平时" };
@@ -247,6 +253,12 @@ internal static class LineBank
     internal static string GetPingPreviewKey()
     {
         return LoadFirstAvailable()?.PingPreviewKey ?? string.Empty;
+    }
+
+    /// <summary>每次 ping 是否换一句（`_ping.perPingVariety`，默认 true）。</summary>
+    internal static bool GetPingVariety()
+    {
+        return LoadFirstAvailable()?.PingPerPingVariety ?? PingPerPingVarietyFallback;
     }
 
     /// <summary>
@@ -672,6 +684,15 @@ internal static class LineBank
 
         foreach (JsonProperty property in element.EnumerateObject())
         {
+            if (property.Value.ValueKind == JsonValueKind.True || property.Value.ValueKind == JsonValueKind.False)
+            {
+                if (string.Equals(property.Name, "perPingVariety", StringComparison.OrdinalIgnoreCase))
+                {
+                    file.PingPerPingVariety = property.Value.GetBoolean();
+                }
+                continue;
+            }
+
             if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetDouble(out double value)) continue;
 
             int seconds = (int)Math.Clamp(value, 1.0, 24 * 60 * 60.0);

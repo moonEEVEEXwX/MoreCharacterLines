@@ -65,7 +65,11 @@ internal static class ScenePing
 
             PingTiming timing = LineBank.GetPingTiming();
             int tier = PingClock.CurrentTier(player, timing);
-            int seed = Seed(RoundOf(player), player.NetId, tier);
+            int round = RoundOf(player);
+
+            // 「第几次 ping」默认算进种子里（每次按都会换一句）；关掉就退回"同回合同档位永远同一句"
+            int pingIndex = LineBank.GetPingVariety() ? PingVariety.Next(round, player.NetId, tier) : 0;
+            int seed = Seed(round, player.NetId, tier, pingIndex);
 
             string? text = LineBank.PickDeterministic(
                 Scenes.Ping, characterId, seed, out _, PingTone.Pools(tier));
@@ -134,20 +138,24 @@ internal static class ScenePing
         return labelText.Substring(0, index) + replacement + labelText.Substring(index + original.Length);
     }
 
-    // ── 两端一致的种子 ──────────────────────────────────────────────────────
+    // ── 种子与"第几次" ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// 种子 = 回合号 + 催促者 NetId + 语气档位。
-    /// 这三样在两端完全相同，所以抽出来的台词也相同 —— 不需要额外同步。
-    /// 同一回合同一档位里重复 ping 会说同一句（像同一个人反复催），换回合/升档才换词。
+    /// 种子 = 回合号 + 催促者 NetId + 语气档位 +（可选）这一档里第几次 ping。
+    ///
+    /// 前三个在两端完全相同 ⇒ 抽出来的台词相同；第四个（<paramref name="pingIndex"/>）也相同 ——
+    /// 前提是两端的 ping 消息一个都没丢。丢包时计数会错开一位，台词就会不一样，
+    /// 但**升档或换回合时会从 0 重新对齐**（见 PingVariety）。
+    /// 把 lines.json 的 `_ping.perPingVariety` 设成 false 就完全不算这一项，退回"永远同一句"。
     /// </summary>
-    internal static int Seed(int round, object? netId, int tier)
+    internal static int Seed(int round, object? netId, int tier, int pingIndex = 0)
     {
         unchecked
         {
             int hash = 17;
             hash = hash * 31 + round;
             hash = hash * 31 + tier;
+            hash = hash * 31 + pingIndex;
 
             string id = Convert.ToString(netId, CultureInfo.InvariantCulture) ?? string.Empty;
             foreach (char c in id) hash = hash * 31 + c;
@@ -167,5 +175,41 @@ internal static class ScenePing
         {
             return -1;
         }
+    }
+}
+
+/// <summary>
+/// 「这是本回合本档位第几次 ping」—— 让每次按下 Ping 都换一句。
+///
+/// 两端各自数自己渲染过的 ping：消息不丢的话两个客户端的计数完全相同，抽出来的台词也一样。
+/// 丢包时会错开一位（那一句之后两边会不一样），但**升档（键里含 tier）或进入下一回合
+/// （整表清空）时会从 0 重新对齐** —— 漂移不会永久累积。
+///
+/// 不想要这个行为：把 lines.json 的 `_ping.perPingVariety` 设成 false（退回"永远同一句"）。
+/// </summary>
+internal static class PingVariety
+{
+    private static readonly Dictionary<string, int> Counts = new(StringComparer.Ordinal);
+    private static int _lastRound = int.MinValue;
+
+    internal static int Next(int round, object? netId, int tier)
+    {
+        if (round != _lastRound)
+        {
+            Counts.Clear();          // 换回合：两端一起从 0 开始
+            _lastRound = round;
+        }
+
+        string key = round + "|" + Convert.ToString(netId, CultureInfo.InvariantCulture) + "|" + tier;
+        Counts.TryGetValue(key, out int index);
+        Counts[key] = index + 1;
+        return index;
+    }
+
+    /// <summary>预检用：清空计数。</summary>
+    internal static void Reset()
+    {
+        Counts.Clear();
+        _lastRound = int.MinValue;
     }
 }
