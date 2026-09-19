@@ -68,13 +68,20 @@ internal static class ScenePing
             int round = RoundOf(player);
 
             // 「第几次 ping」默认算进种子里（每次按都会换一句）；关掉就退回"同回合同档位永远同一句"
-            int pingIndex = LineBank.GetPingVariety() ? PingVariety.Next(round, player.NetId, tier) : 0;
+            bool variety = LineBank.GetPingVariety();
+            string varietyKey = PingVariety.Key(round, player.NetId, tier);
+            int pingIndex = variety ? PingVariety.Next(round, player.NetId, tier) : 0;
             int seed = Seed(round, player.NetId, tier, pingIndex);
+            string[] pools = PingTone.Pools(tier);
 
-            string? text = LineBank.PickDeterministic(
-                Scenes.Ping, characterId, seed, out _, PingTone.Pools(tier));
+            // 开了"每次换一句"时，还要避开上一次刚说过的那句 ——
+            // 池子只有 2~3 句，纯随机会有 30%~50% 概率连按两次抽到同一句，看起来就像"没变"
+            string? text = variety
+                ? PickVaried(characterId, seed, PingVariety.LastLine(varietyKey), pools)
+                : LineBank.PickDeterministic(Scenes.Ping, characterId, seed, out _, pools);
 
             if (string.IsNullOrEmpty(text)) return;   // 我们没写词 → 保持原版
+            if (variety) PingVariety.Remember(varietyKey, text!);
 
             NSpeechBubbleVfx? bubble = GetDialogue(__instance, player);
             if (bubble is null) return;
@@ -141,6 +148,24 @@ internal static class ScenePing
     // ── 种子与"第几次" ─────────────────────────────────────────────────────
 
     /// <summary>
+    /// 抽一句，并尽量避开上一次刚说过的那句（池子 ≥2 句时"按一下换一句"才真的成立）。
+    /// 两端拿到的 <paramref name="last"/> 与 <paramref name="seed"/> 相同 ⇒ 抽到的结果也相同。
+    /// </summary>
+    internal static string? PickVaried(string characterId, int seed, string? last, string[] pools)
+    {
+        string? text = LineBank.PickDeterministic(Scenes.Ping, characterId, seed, out _, pools);
+        if (text is null) return null;
+
+        for (int attempt = 1; attempt <= 6 && string.Equals(text, last, StringComparison.Ordinal); attempt++)
+        {
+            string? retry = LineBank.PickDeterministic(Scenes.Ping, characterId, seed + attempt * 7919, out _, pools);
+            if (retry is not null) text = retry;
+        }
+
+        return text;
+    }
+
+    /// <summary>
     /// 种子 = 回合号 + 催促者 NetId + 语气档位 +（可选）这一档里第几次 ping。
     ///
     /// 前三个在两端完全相同 ⇒ 抽出来的台词相同；第四个（<paramref name="pingIndex"/>）也相同 ——
@@ -190,26 +215,46 @@ internal static class ScenePing
 internal static class PingVariety
 {
     private static readonly Dictionary<string, int> Counts = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, string> LastLines = new(StringComparer.Ordinal);
     private static int _lastRound = int.MinValue;
+
+    /// <summary>「这一局里谁、哪回合、哪一档」—— 计数与"上一条"都用这个键。</summary>
+    internal static string Key(int round, object? netId, int tier)
+    {
+        return round + "|" + Convert.ToString(netId, CultureInfo.InvariantCulture) + "|" + tier;
+    }
 
     internal static int Next(int round, object? netId, int tier)
     {
         if (round != _lastRound)
         {
             Counts.Clear();          // 换回合：两端一起从 0 开始
+            LastLines.Clear();
             _lastRound = round;
         }
 
-        string key = round + "|" + Convert.ToString(netId, CultureInfo.InvariantCulture) + "|" + tier;
+        string key = Key(round, netId, tier);
         Counts.TryGetValue(key, out int index);
         Counts[key] = index + 1;
         return index;
+    }
+
+    /// <summary>上一次在这个键下说过的那句（没有就 null）—— 用来避免连按两次一模一样。</summary>
+    internal static string? LastLine(string key)
+    {
+        return LastLines.TryGetValue(key, out string? line) ? line : null;
+    }
+
+    internal static void Remember(string key, string line)
+    {
+        LastLines[key] = line;
     }
 
     /// <summary>预检用：清空计数。</summary>
     internal static void Reset()
     {
         Counts.Clear();
+        LastLines.Clear();
         _lastRound = int.MinValue;
     }
 }
