@@ -1,0 +1,40 @@
+name: Release
+
+# 打 tag（例如 v0.1.0）→ 自动组装可安装 zip → 建 GitHub Release。
+#
+# 为什么二进制要从仓库里拿：CI runner 上没有游戏本体，编译不了（见 README「开发」）。
+# 所以流程是「本地 build.ps1 构建 → 提交 release/ 里的 dll+pck → 打 tag 自动发版」，
+# release/ARTIFACTS.txt 是 build.ps1 写的指纹，CI 会核对，防止手工替换二进制。
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write          # 建 Release 需要
+
+jobs:
+  release:
+    name: 组装发布包并创建 Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 核对 release/ 里的构建产物
+        run: python tools/check_release_artifacts.py
+
+      - name: 组装 zip（tag 与 mod_manifest.json 的 version 不一致会直接失败）
+        run: python tools/make_release_zip.py --expect-version "${GITHUB_REF_NAME}"
+
+      - name: 创建 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/*.zip \
+            --title "更多角色台词 ${GITHUB_REF_NAME}" \
+            --generate-notes
+          echo "Release: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" >> "$GITHUB_STEP_SUMMARY"

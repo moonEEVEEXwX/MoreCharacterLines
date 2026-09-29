@@ -64,3 +64,11 @@ jobs:
               sys.exit(1)
           print(f'清单 OK：id={mod_id} version={manifest["version"]} min_game_version={manifest["min_game_version"]}')
           PY
+
+      # 二进制（dll/pck）是本地 build.ps1 构建后提交的 —— 这里核对指纹 + 演练打包，
+      # 保证 tag 触发 release.yml 时一定能组装出发布包。
+      - name: release/ 产物指纹核对
+        run: python tools/check_release_artifacts.py
+
+      - name: 打包演练（组装发布 zip，不发布）
+        run: python tools/make_release_zip.py

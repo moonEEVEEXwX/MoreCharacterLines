@@ -32,7 +32,8 @@
 
 ## 安装
 
-1. 从 [Releases](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases) 或仓库里拿到 `MoreCharacterLines` 文件夹；
+1. 到 [Releases](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases) 下载 `MoreCharacterLines_v0.1.0.zip`，解压得到 `MoreCharacterLines` 文件夹；
+   （也可以自己构建，见 [开发](#开发)。）
 2. 整个文件夹丢进游戏目录：
 
    ```
@@ -126,6 +127,8 @@ mod 角色直接用它的角色 ID 当键即可（例如 `"WATCHER"`），**不�
 | [`assets/MoreCharacterLines/lines.json`](assets/MoreCharacterLines/lines.json) | 出厂台词（打包进 PCK；头部注释就是写作指南） |
 | [`tools/preflight`](tools/preflight) | 预检工具：**不开游戏**跑 84 项断言（补丁挂点、反射目标、抽取逻辑、ping 规则、JSON 解析） |
 | [`check_lines.py`](check_lines.py) | 台词文件语法 + 语义闸门（少逗号、ping 里写旁白括号、未知 BBCode……） |
+| [`tools/make_release_zip.py`](tools/make_release_zip.py) | 把仓库里的东西组装成可安装的发布 zip（本机 / CI / 发版共用同一份逻辑） |
+| [`release/`](release) | **提交进仓库的构建产物**（`dll` + `pck` + `ARTIFACTS.txt`）：公共 CI 编译不了，只能本地构建后提交 |
 
 ## 开发
 
@@ -140,17 +143,28 @@ python check_lines.py assets\MoreCharacterLines\lines.json
 powershell -ExecutionPolicy Bypass -File tools\preflight\build.ps1
 cd tools\preflight\bin
 dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreCharacterLines\MoreCharacterLines.dll"
+
+# 本地组装一个发布 zip（和 CI 发版用的是同一个脚本）
+python tools\make_release_zip.py
 ```
 
-CI（GitHub Actions）每次 push 会跑：**台词校验 + 所有 `.ps1` 的 BOM 闸门 + 清单字段检查** ——
-这三样都不需要游戏本体，所以在公共 runner 上就能跑。
-**编译与预检跑不了**（要游戏目录里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，不能进公开仓库），
-本地 `build.ps1` + `tools\preflight\build.ps1` 负责。
+### CI / 发版
+
+`push` 时（[`ci.yml`](.github/workflows/ci.yml)）跑不需要游戏本体的检查：
+**台词校验 + 所有 `.ps1` 的 BOM 闸门 + 清单字段检查 + `release/` 产物指纹核对 + 打包演练**。
+
+打 tag 时（[`release.yml`](.github/workflows/release.yml)）自动发版：
+组装 `MoreCharacterLines_v<版本>.zip` → 建 GitHub Release（附自动生成的更新说明）。
+tag 名和 `mod_manifest.json` 里的 `version` 不一致会**直接失败**，避免发错版本号。
+
+**编译与预检跑不了**（要游戏目录里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，版权原因不能进公开仓库），
+所以流程是「**本地构建 → 提交 `release/` 里的 dll+pck → 打 tag 自动发版**」；
+`release/ARTIFACTS.txt` 是 `build.ps1` 写的指纹，CI 靠它确认提交的二进制没被手工换过。
 
 工程约定（都是踩过坑的）：
 
 - `.ps1` 必须存成 **UTF-8 with BOM** —— 否则 Windows PowerShell 5.1 按 GBK 读会直接语法错误；
-  丢了就跑 `fix-encoding.ps1`（递归扫全仓库）。
+  丢了就跑 `fix-encoding.ps1`（递归扫全仓库）。**用编辑器改完 `.ps1` 请顺手跑一次**（有些编辑器会吃掉 BOM）。
 - `build.ps1` **不覆盖**已存在的 `lines.json`，但会提示"和仓库不一致"；加 `-SyncLines` 用仓库版本覆盖。
 - 只有 .NET 8 SDK 时，脚本会自动回退到 Roslyn(csc) 编译 + 游戏自带的 .NET 9 程序集，不用额外装 SDK。
 

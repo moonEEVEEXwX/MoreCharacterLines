@@ -49,8 +49,13 @@
 | `LineBank.cs` | 台词库：读三处 `lines.json`、解析、按场景/角色/条件抽取 |
 | `OneShot.cs` | "只播一次"记录（`%AppData%\SlayTheSpire2\MoreCharacterLines\state.json`） |
 | `assets/MoreCharacterLines/lines.json` | 出厂台词（打包进 PCK） |
-| `build.ps1` | 编译 + 打包 PCK + 安装到 `mods\MoreCharacterLines\` |
+| `build.ps1` | 编译 + 打包 PCK + 同步 `release/` 产物 + 安装到 `mods\MoreCharacterLines\` |
 | `fix-encoding.ps1` | 修复 `.ps1` 的 UTF-8 BOM（Windows PowerShell 5.1 必需） |
+| `release/` | **提交进仓库的构建产物**（`dll` / `pck` / `ARTIFACTS.txt`）：公共 CI 装不了游戏本体，编译不了，只能本地构建后提交（决策见 §9） |
+| `tools/make_release_zip.py` | 组装发布 zip（本机 / CI 演练 / tag 发版共用同一份逻辑，Python 跨平台） |
+| `tools/check_release_artifacts.py` | 核对 `release/` 里的二进制与 `ARTIFACTS.txt` 指纹一致（防止手工替换） |
+| `.github/workflows/ci.yml` | push 时：台词闸门 + `.ps1` BOM + 清单字段 + 产物指纹 + 打包演练 |
+| `.github/workflows/release.yml` | 打 tag 时：组装 zip → 建 GitHub Release（tag 与 `mod_manifest.json` 版本不一致直接失败） |
 
 ### 数据流
 
@@ -530,6 +535,10 @@ girya_progress  ← 还没练满时的鼓励
 | ping 台词**禁止 `（）` 旁白**，情绪改用 BBCode（`[wave]` / `[shake]`） | 气泡代表**角色说出口的话**，写括号等于让角色旁白自己；火堆那套「（）= 旁白」是内心独白专用的体例。静默猎手三档都是「……」时，效果是唯一能表达情绪的手段 |
 | `check_lines.py` 加语义闸门（ping 括号 = 构建失败；未知 BBCode = 警告） | 语法检查拦不住"写法错"——括号和写错的效果名都会**静默地**显示成奇怪内容，让脚本先拦住 |
 | 加**调试预览键**（`_debug.pingPreviewKey`，默认关）——⚠️ **施工中，挂点没选对、已临时撤掉** | ping 气泡只在多人局出现，而多人环境各有各的坑（CouchCoop 浏览器端过不了涅奥、假联机里按钮不出现、局域网直连要关 RitsuLib）——**写台词不该被联机流程卡住**。预览走和原版一样的气泡路径，纯本地外观、不发消息、别人看不见 |
+| **把构建产物提交进仓库**（`release/`，选项 C） | 编译要游戏本体里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，版权原因不能进公开仓库 → 公共 runner 上**编译不了**。玩家希望"打个 tag 就自动出 Release"，所以选 C：本地构建 → 提交 dll+pck → CI 只管打包（而不是让玩家手动传 release 附件） |
+| 产物用 `ARTIFACTS.txt`（SHA256 + 字节数）自校验 | 提交二进制最大的风险是"二进制和源码不同步、或被人换过都不知道"。指纹由 `build.ps1` 每次构建自动写出，CI 核对 → 换过就会红 |
+| 打包逻辑抽成 `tools/make_release_zip.py`（而不是写两遍 YAML） | 本机、CI 演练、tag 发版三处必须产出**同一个 zip**；Python 在 Windows / ubuntu 都能跑 |
+| tag 名必须等于 `mod_manifest.json` 的 `version` | 发版最烦的错是"zip 里的清单版本和 tag 对不上"；`--expect-version` 直接拦死 |
 
 ---
 
@@ -591,6 +600,7 @@ girya_progress  ← 还没练满时的鼓励
 | ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
 | git | ✅ **已开源**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，GPL-3.0）。提交署名统一 `Dsh (vibecoding) <dsh@example.com>`（**Dsh = DeepSeek Harness，即本 agent 工具，不是人名**；33 个历史提交已重写，文件内容零改动）；`mod_manifest.json` 的 `author` 用 GitHub 名 `moonEEVEEXwX`；**push 两种都行**：玩家终端直接 `git push`；或让 AI 推（沙箱默认会拦 `sh.exe` → 需要一次性放权授权，放行后凭据可复用） |
+| 发版流水线 | ✅ 已接（选项 C，见 §9）：`build.ps1` 每次构建同步 `release\`（dll/pck/`ARTIFACTS.txt`）→ 提交 → 打 `v*` tag → `release.yml` 自动组装 zip 并建 Release。`ci.yml` 每次 push 会核对指纹 + 演练打包 |
 
 ### 关键路径
 
@@ -606,15 +616,26 @@ girya_progress  ← 还没练满时的鼓励
 | IL 阅读器（查游戏逻辑） | `D:\sts2modtest\_tools\ildump\ildump\bin\Release\net8.0\ildump.exe` |
 | PCK 工具（list / cat / extract） | `D:\sts2modtest\_tools\pck_tool.py` |
 | 游戏本地化导出（考证口吻用） | `D:\sts2modtest\_ref\loc_zhs`、`_ref\loc_eng` |
+| 发布的二进制（提交进仓库） | `release\MoreCharacterLines.dll` / `.pck` / `ARTIFACTS.txt` |
 
 ### 常用命令
 
 ```powershell
-# 构建 + 安装（改完 assets 里的台词必须跑这个）
+# 构建 + 安装（改完 assets 里的台词必须跑这个；顺带刷新 release\ 产物）
 cd D:\sts2modtest\MoreCharacterLines; powershell -ExecutionPolicy Bypass -File build.ps1
+
+# 改完 .ps1 先修 BOM（编辑器常把 BOM 吃掉 → PowerShell 5.1 会按 GBK 读，报一堆奇怪语法错误）
+powershell -ExecutionPolicy Bypass -File fix-encoding.ps1
 
 # 只校验台词文件（少逗号会报行号）
 python check_lines.py assets\MoreCharacterLines\lines.json
+
+# CI 那两项检查（本机也能跑）
+python tools\check_release_artifacts.py
+python tools\make_release_zip.py
+
+# 发版：提交 release\ 更新后打 tag 推上去，Actions 会自动建 Release
+git tag v0.1.0; git push origin v0.1.0
 
 # 预检：先构建（clone 下来第一次要跑），再对着"已安装的那份"跑断言
 cd D:\sts2modtest\MoreCharacterLines
@@ -648,6 +669,19 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 2. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`（流程见 §11）。
 3. 玩家说"还有很多要求"，先问清楚再动手。
 
+### 发版流程（一条命令）
+
+```powershell
+cd D:\sts2modtest\MoreCharacterLines
+powershell -ExecutionPolicy Bypass -File build.ps1     # 顺带刷新 release\ 里的 dll/pck/ARTIFACTS.txt
+git add -A; git commit -m "..."; git push              # 提交产物（CI 会核对指纹）
+git tag v0.1.0; git push origin v0.1.0                 # 触发 release.yml → 自动建 Release
+```
+
+- tag 名必须等于 `mod_manifest.json` 的 `version`，否则 workflow 直接失败（防止发错版本号）。
+- 只是想让 Actions 演练一遍打包：push `main` 就会跑 `ci.yml`（含打包演练，不会建 Release）。
+- 万一 Release 建失败：tag 已经推上去了，修好 workflow 后在 Actions 页面 **Re-run** 即可。
+
 ### 踩过的坑（别再踩）
 
 - 游戏优先读 **mod 文件夹里的 `lines.json`**；改仓库里的那份必须重新 `build.ps1` 才生效。
@@ -664,6 +698,10 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 - ping 的**两端一致**靠"同步状态派生种子"，任何依赖本机时序的东西（计数器、随机数、本地时间）
   都不能进种子 —— 一进就会两边不一样。
 - `.ps1` 必须 UTF-8 **with BOM**，丢了就跑 `fix-encoding.ps1`。
+  （**编辑器和 `edit` 工具都会吃掉 BOM** —— 改完 `.ps1` 立刻跑一次，否则 PowerShell 5.1 按 GBK 读，
+  会报"Unexpected token"这类和真实原因完全无关的语法错误。）
+- **公共 CI 编译不了**（要游戏本体的 `sts2.dll` 等）：改代码后必须本地 `build.ps1` 并**提交 `release\` 里的产物**，
+  否则 Release 里的 dll 是旧的 —— 指纹核对（`tools/check_release_artifacts.py`）就是为了暴露这种不同步。
 - mod 三件套必须同名：`<id>.json` / `<id>.dll` / `<id>.pck`，且清单必须有 `"id"`。
 - 私用/反射目标改名时：日志会报错，mod 会保持原版文案，不会崩游戏。
 - **改 mod id（改名）时必须同步这些地方**，漏一处就静默失效或双份加载：
