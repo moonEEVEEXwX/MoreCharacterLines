@@ -49,13 +49,13 @@
 | `LineBank.cs` | 台词库：读三处 `lines.json`、解析、按场景/角色/条件抽取 |
 | `OneShot.cs` | "只播一次"记录（`%AppData%\SlayTheSpire2\MoreCharacterLines\state.json`） |
 | `assets/MoreCharacterLines/lines.json` | 出厂台词（打包进 PCK） |
-| `build.ps1` | 编译 + 打包 PCK + 同步 `release/` 产物 + 安装到 `mods\MoreCharacterLines\` |
+| `build.ps1` | 本地构建：编译 + 打包 PCK + 安装到 `mods\MoreCharacterLines\`（引用游戏本体的 DLL；只有 .NET 8 SDK 时自动回退到 Roslyn+csc） |
 | `fix-encoding.ps1` | 修复 `.ps1` 的 UTF-8 BOM（Windows PowerShell 5.1 必需） |
-| `release/` | **提交进仓库的构建产物**（`dll` / `pck` / `ARTIFACTS.txt`）：公共 CI 装不了游戏本体，编译不了，只能本地构建后提交（决策见 §9） |
-| `tools/make_release_zip.py` | 组装发布 zip（本机 / CI 演练 / tag 发版共用同一份逻辑，Python 跨平台） |
-| `tools/check_release_artifacts.py` | 核对 `release/` 里的二进制与 `ARTIFACTS.txt` 指纹一致（防止手工替换） |
-| `.github/workflows/ci.yml` | push 时：台词闸门 + `.ps1` BOM + 清单字段 + 产物指纹 + 打包演练 |
-| `.github/workflows/release.yml` | 打 tag 时：组装 zip → 建 GitHub Release（tag 与 `mod_manifest.json` 版本不一致直接失败） |
+| `pack_godot_pck.py` | 把 `assets/` 打成 Godot PCK（CI 也用它，纯 Python，不需要 Godot） |
+| `tools/make_release_zip.py` | 组装发布 zip（本机 / CI / tag 发版共用同一份逻辑，Python 跨平台） |
+| `.github/actions/build-mod/action.yml` | CI 的构建步骤：装 .NET 9 SDK + Python → 台词闸门 → `dotnet build` → 打包 PCK → 组装 zip →（可选）上传 artifact |
+| `.github/workflows/ci.yml` | push / PR：`checks`（台词 + BOM + 清单）+ `build`（编译打包并上传 artifact） |
+| `.github/workflows/release.yml` | 打 tag 时：走同一个构建 action → 建 GitHub Release（tag 与 `mod_manifest.json` 版本不一致直接失败） |
 
 ### 数据流
 
@@ -535,10 +535,16 @@ girya_progress  ← 还没练满时的鼓励
 | ping 台词**禁止 `（）` 旁白**，情绪改用 BBCode（`[wave]` / `[shake]`） | 气泡代表**角色说出口的话**，写括号等于让角色旁白自己；火堆那套「（）= 旁白」是内心独白专用的体例。静默猎手三档都是「……」时，效果是唯一能表达情绪的手段 |
 | `check_lines.py` 加语义闸门（ping 括号 = 构建失败；未知 BBCode = 警告） | 语法检查拦不住"写法错"——括号和写错的效果名都会**静默地**显示成奇怪内容，让脚本先拦住 |
 | 加**调试预览键**（`_debug.pingPreviewKey`，默认关）——⚠️ **施工中，挂点没选对、已临时撤掉** | ping 气泡只在多人局出现，而多人环境各有各的坑（CouchCoop 浏览器端过不了涅奥、假联机里按钮不出现、局域网直连要关 RitsuLib）——**写台词不该被联机流程卡住**。预览走和原版一样的气泡路径，纯本地外观、不发消息、别人看不见 |
-| **把构建产物提交进仓库**（`release/`，选项 C） | 编译要游戏本体里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，版权原因不能进公开仓库 → 公共 runner 上**编译不了**。玩家希望"打个 tag 就自动出 Release"，所以选 C：本地构建 → 提交 dll+pck → CI 只管打包（而不是让玩家手动传 release 附件） |
-| 产物用 `ARTIFACTS.txt`（SHA256 + 字节数）自校验 | 提交二进制最大的风险是"二进制和源码不同步、或被人换过都不知道"。指纹由 `build.ps1` 每次构建自动写出，CI 核对 → 换过就会红 |
-| 打包逻辑抽成 `tools/make_release_zip.py`（而不是写两遍 YAML） | 本机、CI 演练、tag 发版三处必须产出**同一个 zip**；Python 在 Windows / ubuntu 都能跑 |
+| ~~把构建产物提交进仓库（`release/`，选项 C）~~ → **改为「CI 用 NuGet 引用程序集自己编译」** | 玩家反馈：希望**小改动也由 Actions 出构建**，大 release 自己推；而选项 C 每次改代码都要本地编译 + 提交二进制，二进制还会在仓库里堆积、diff 没法看。查到社区有 [`FuYnAloft.Sts2.References`](https://www.nuget.org/packages/FuYnAloft.Sts2.References)（Refasmer **剥掉全部 IL、只留元数据**，明确面向 CI/CD），加上 Godot 官方 `GodotSharp` 包，公共 runner 就能编译，于是撤回 C |
+| 引用切换用 `CI=true` 自动判断，不搞两套 csproj | GitHub Actions 自带 `CI=true`；本地默认仍引用游戏本体（**版本永远和本机游戏一致**，最可信），CI 走 NuGet。也留了显式开关 `-p:UseSts2NuGetRefs=true`，好在本地复现 CI 那条路 |
+| ~~产物指纹 `release/ARTIFACTS.txt` + `check_release_artifacts.py`~~ → 删掉 | 那是给"提交二进制"兜底的防呆；现在二进制不进仓库，这套机制没有存在意义 |
+| 打包逻辑抽成 `tools/make_release_zip.py`（而不是写两遍 YAML） | 本机、push 时的 artifact、tag 发版三处必须产出**同一个 zip**；Python 在 Windows / ubuntu 都能跑 |
 | tag 名必须等于 `mod_manifest.json` 的 `version` | 发版最烦的错是"zip 里的清单版本和 tag 对不上"；`--expect-version` 直接拦死 |
+| 构建步骤抽成 composite action（`.github/actions/build-mod`），push 与 tag 共用 | 两条流水线必须产出同样的东西；写两份 YAML 迟早漂移 |
+| 不用自托管 runner | 想让 Actions 拿到游戏本体的 DLL，另一条路是把 runner 装到玩家机器上；但那要常开一台机器、装服务、维护权限，而引用包方案零成本。**除非引用包被删或长期不同步**，否则不用自托管 |
+| **引用包方案已实测**：NuGet 引用编出来的 DLL 跑预检 **84 项全过** | 换编译方式最大的风险是"编出来的和本地不一样"。证据：① `sts2` / `0Harmony` / `GodotSharp` 三个程序集标识（Name / Version / PublicKeyToken）与游戏本体**完全一致**（运行时绑定没问题）；② 同一套源码、同一版 csc，游戏引用 vs NuGet 引用的产物**大小相同、只差 AssemblyRef 顺序**，NuGet 版预检 84/84 |
+| `tools/**` 排除出编译 | `Microsoft.NET.Sdk` 默认把项目下所有 `*.cs` 编进去 —— 预检工具 `Preflight.cs` 也被塞进 mod DLL，白白胖 24 KB（55808 → 31744 B）；`csproj` 加 `Compile Remove`，`build.ps1` 的 csc 源码扫描也同步排除 |
+| 引用包版本（`0.111.0-beta`）+ `GodotSharp`（`4.5.1`）与游戏版本强绑定 | 游戏 EA 期更新频繁，引用包按 Steam 分支发布（`-beta` = public-test 分支）。**升游戏版本时一起改三处**：`csproj` 的 `Sts2RefsVersion` / `GodotSharpVersion` + `mod_manifest.json` 的 `min_game_version`，并重跑预检 |
 
 ---
 
@@ -600,7 +606,8 @@ girya_progress  ← 还没练满时的鼓励
 | ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
 | git | ✅ **已开源**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，GPL-3.0）。提交署名统一 `Dsh (vibecoding) <dsh@example.com>`（**Dsh = DeepSeek Harness，即本 agent 工具，不是人名**；33 个历史提交已重写，文件内容零改动）；`mod_manifest.json` 的 `author` 用 GitHub 名 `moonEEVEEXwX`；**push 两种都行**：玩家终端直接 `git push`；或让 AI 推（沙箱默认会拦 `sh.exe` → 需要一次性放权授权，放行后凭据可复用） |
-| 发版流水线 | ✅ 已接并跑通（选项 C，见 §9）：`build.ps1` 每次构建同步 `release\`（dll/pck/`ARTIFACTS.txt`）→ 提交 → 打 `v*` tag → `release.yml` 自动组装 zip 并建 Release。`ci.yml` 每次 push 会核对指纹 + 演练打包。<br>**`v0.1.0` 已发布**：<https://github.com/moonEEVEEXwX/MoreCharacterLines/releases/tag/v0.1.0>（附件 `MoreCharacterLines_v0.1.0.zip`，83.9 KB）；Actions 的 `CI` 与 `Release` 两次运行都是 success |
+| 发版流水线 | ✅ 已接并跑通（**架构改过一次，见 §9**）：Actions **自己编译**（NuGet 引用程序集，不需要游戏本体）→ 每次 push 出 artifact、打 `v*` tag 出 Release。**`v0.1.0` 已发布**：<https://github.com/moonEEVEEXwX/MoreCharacterLines/releases/tag/v0.1.0>（附件 `MoreCharacterLines_v0.1.0.zip`）。<br>⚠️ `v0.1.0` 那个包里的 DLL 是"选项 C 时期"的（55.8 KB，**误把预检工具编进去了**）；改架构后重新编译的是 31.7 KB，**准备发下个版本时用新流水线出包** |
+| 已安装的那份 | ✅ 已更新为清理过的 DLL（`mods\MoreCharacterLines\`，31 744 B，预检 84/84 通过） |
 
 ### 关键路径
 
@@ -616,12 +623,14 @@ girya_progress  ← 还没练满时的鼓励
 | IL 阅读器（查游戏逻辑） | `D:\sts2modtest\_tools\ildump\ildump\bin\Release\net8.0\ildump.exe` |
 | PCK 工具（list / cat / extract） | `D:\sts2modtest\_tools\pck_tool.py` |
 | 游戏本地化导出（考证口吻用） | `D:\sts2modtest\_ref\loc_zhs`、`_ref\loc_eng` |
-| 发布的二进制（提交进仓库） | `release\MoreCharacterLines.dll` / `.pck` / `ARTIFACTS.txt` |
+| 引用程序集（CI 用，NuGet） | `FuYnAloft.Sts2.References` `0.111.0-beta` + `GodotSharp` `4.5.1`（版本写在 `csproj` 顶部） |
+| 本机装的 .NET 9 SDK（只为复现 CI 那条编译路） | `D:\sts2modtest\_tools\dotnet9\dotnet.exe`（9.0.318，只解压到目录、没进 PATH） |
+| 本机 NuGet 包缓存 / 本地源（同上前提） | `_tools\nugetpackages`、`_tools\localnuget`（本机 NuGet 走不了代理，用本地源喂包） |
 
 ### 常用命令
 
 ```powershell
-# 构建 + 安装（改完 assets 里的台词必须跑这个；顺带刷新 release\ 产物）
+# 构建 + 安装（改完 assets 里的台词必须跑这个）
 cd D:\sts2modtest\MoreCharacterLines; powershell -ExecutionPolicy Bypass -File build.ps1
 
 # 改完 .ps1 先修 BOM（编辑器常把 BOM 吃掉 → PowerShell 5.1 会按 GBK 读，报一堆奇怪语法错误）
@@ -630,12 +639,16 @@ powershell -ExecutionPolicy Bypass -File fix-encoding.ps1
 # 只校验台词文件（少逗号会报行号）
 python check_lines.py assets\MoreCharacterLines\lines.json
 
-# CI 那两项检查（本机也能跑）
-python tools\check_release_artifacts.py
+# 本机组装一个发布 zip（CI 用的是同一个脚本）
+python pack_godot_pck.py assets -o bin\MoreCharacterLines.pck --engine-version 4.5.1 --pack-version 3
 python tools\make_release_zip.py
 
-# 发版：提交 release\ 更新后打 tag 推上去，Actions 会自动建 Release
-git tag v0.1.0; git push origin v0.1.0
+# 在本地复现 CI 那条编译路（用 NuGet 引用程序集，不需要游戏本体）
+#   本机 NuGet 走不了代理时，先下载 nupkg 丢进 _tools\localnuget，再加 --source
+& D:\sts2modtest\_tools\dotnet9\dotnet.exe build MoreCharacterLines.csproj -c Release -p:UseSts2NuGetRefs=true --source D:\sts2modtest\_tools\localnuget
+
+# 发版：什么时候打 tag 你自己定，Actions 会自动编译 + 建 Release
+git tag v0.1.1; git push origin v0.1.1
 
 # 预检：先构建（clone 下来第一次要跑），再对着"已安装的那份"跑断言
 cd D:\sts2modtest\MoreCharacterLines
@@ -658,7 +671,7 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 > - 玩家随时可以自己 `git push`（走同一个 GCM 凭据），或收回这条授权。
 ### 下一个任务（玩家指定顺序）
 
-> 改名（`MoreCharacterLines`）和 ping 接入都已经做完，`v0.1.0` 也自动发出去了。下一步见下。
+> 改名（`MoreCharacterLines`）、ping 接入、CI 自己编译打包都已就绪（发版时机由玩家决定）。下一步见下。
 
 1. **ping 多人联机实测**（需要两台机器 / 两个客户端）—— **唯一的 P0 遗留**：
    - 把 `游戏目录\mods\MoreCharacterLines\lines.json` 里的 `_ping.urgentAfterSeconds` /
@@ -668,21 +681,32 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
    - 想连按不重样也一起看：连按 5 次应该换 5 句（`_ping.perPingVariety` 默认 `true`；
      设 `false` 则同回合同档位固定一句、两端 100% 一致）；
    - 日志里搜 `[MoreCharacterLines] 催促台词（档位 N）` 可以看到档位与抽中的句子。
-2. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`（流程见 §11）。
-3. 玩家说"还有很多要求"，先问清楚再动手。
+2. **（可选）发 `v0.1.1`**：把清理过的 DLL（31.7 KB，不再夹带预检工具）用新流程正式发一次版。
+   想发的话：`mod_manifest.json` 版本改 `0.1.1` → 提交 → `git tag v0.1.1; git push origin v0.1.1`。
+3. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`（流程见 §11）。
+4. 玩家说"还有很多要求"，先问清楚再动手。
 
-### 发版流程（一条命令）
+### 发版流程
 
 ```powershell
 cd D:\sts2modtest\MoreCharacterLines
-powershell -ExecutionPolicy Bypass -File build.ps1     # 顺带刷新 release\ 里的 dll/pck/ARTIFACTS.txt
-git add -A; git commit -m "..."; git push              # 提交产物（CI 会核对指纹）
-git tag v0.1.0; git push origin v0.1.0                 # 触发 release.yml → 自动建 Release
+# 改完代码：本地构建 + 自测（预检 84 项 + 台词闸门）
+powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -ExecutionPolicy Bypass -File tools\preflight\build.ps1
+git add -A; git commit -m "..."; git push     # 这次 push 的 CI 会编译打包并留一个 artifact
+
+# 想发版时（你决定时机）：改版本号 → 提交 → 打 tag → 推
+#   mod_manifest.json 的 version 必须和 tag 一致，否则 workflow 直接失败
+git tag v0.1.1; git push origin v0.1.1       # 触发 release.yml：Actions 自己编译 + 建 Release
 ```
 
+> 小改动**不用发版**：push 之后到 Actions 的 `CI` 运行页面底部，Artifacts 里有 `MoreCharacterLines-r<运行号>.zip`，
+> 解压即装 —— 这就是"小改动让 Actions 自己构建一下"。
+> 二进制**不进仓库**，仓库里只有源码、台词和文档。
+
 - tag 名必须等于 `mod_manifest.json` 的 `version`，否则 workflow 直接失败（防止发错版本号）。
-- 只是想让 Actions 演练一遍打包：push `main` 就会跑 `ci.yml`（含打包演练，不会建 Release）。
 - 万一 Release 建失败：tag 已经推上去了，修好 workflow 后在 Actions 页面 **Re-run** 即可。
+- **只有 tag 会建 Release**；push `main` 只出 artifact，不会公开发版 —— 什么算"大版本"由你决定。
 
 ### 踩过的坑（别再踩）
 
@@ -702,8 +726,12 @@ git tag v0.1.0; git push origin v0.1.0                 # 触发 release.yml → 
 - `.ps1` 必须 UTF-8 **with BOM**，丢了就跑 `fix-encoding.ps1`。
   （**编辑器和 `edit` 工具都会吃掉 BOM** —— 改完 `.ps1` 立刻跑一次，否则 PowerShell 5.1 按 GBK 读，
   会报"Unexpected token"这类和真实原因完全无关的语法错误。）
-- **公共 CI 编译不了**（要游戏本体的 `sts2.dll` 等）：改代码后必须本地 `build.ps1` 并**提交 `release\` 里的产物**，
-  否则 Release 里的 dll 是旧的 —— 指纹核对（`tools/check_release_artifacts.py`）就是为了暴露这种不同步。
+- **CI 现在能自己编译**，靠的是 NuGet 上"只留元数据"的 StS2 引用程序集 + 官方 GodotSharp（见 §9）：
+  - 升游戏版本时**三处一起改**：`csproj` 的 `Sts2RefsVersion` / `GodotSharpVersion` + `mod_manifest.json` 的 `min_game_version`，
+    改完**必须重新编译 + 跑预检**（引用包和真游戏对不上时，编译能过、运行时才炸）；
+  - `dotnet build` 默认把**项目下所有 `*.cs`** 编进去 —— `tools/` 里的预检工具曾被塞进 mod DLL（+24 KB），
+    `csproj` 与 `build.ps1` 都要排除；
+  - 本机 NuGet 走不了代理时（restore 报 SSL/凭据错）：把 nupkg 下下来丢进一个目录，`--source <该目录>` 当本地源用。
 - mod 三件套必须同名：`<id>.json` / `<id>.dll` / `<id>.pck`，且清单必须有 `"id"`。
 - 私用/反射目标改名时：日志会报错，mod 会保持原版文案，不会崩游戏。
 - **改 mod id（改名）时必须同步这些地方**，漏一处就静默失效或双份加载：

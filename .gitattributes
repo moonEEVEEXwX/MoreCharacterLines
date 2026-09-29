@@ -15,7 +15,3 @@
 *.dll binary
 *.pck binary
 *.png binary
-
-# release/ARTIFACTS.txt 由 build.ps1 以 CRLF 写出、逐字节比对（见 build.ps1 第 3.5 步），
-# 所以不做换行转换，否则"构建一次就说文件变了"。
-release/ARTIFACTS.txt -text

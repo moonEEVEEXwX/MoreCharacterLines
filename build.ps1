@@ -119,7 +119,7 @@ if (Test-DotnetSdk9) {
     }
     Write-Host "引用托管程序集 $($refs.Count) 个"
     $sources = @(Get-ChildItem -Path $projectDir -Recurse -Filter *.cs |
-        Where-Object { $_.FullName -notlike "*\bin\*" -and $_.FullName -notlike "*\obj\*" } |
+        Where-Object { $_.FullName -notlike "*\bin\*" -and $_.FullName -notlike "*\obj\*" -and $_.FullName -notlike "*\tools\*" } |
         ForEach-Object { $_.FullName })
     if ($sources.Count -eq 0) { throw "$projectDir 下没找到 .cs 源文件" }
 
@@ -150,38 +150,6 @@ $pckPath = Join-Path $projectDir "bin\$modId.pck"
 & python $packScript $workDir -o $pckPath --engine-version 4.5.1 --pack-version 3
 if ($LASTEXITCODE -ne 0) { throw "PCK 打包失败（退出码 $LASTEXITCODE）" }
 
-# ── 3.5 同步构建产物到仓库的 release\（GitHub Actions 发版要用，见 release\README.md）──
-Write-Step "同步产物到 release\"
-
-$releaseDir = Join-Path $projectDir "release"
-New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-
-# 产物指纹：CI 用它核对 release\ 里的二进制确实出自 build.ps1（不是手工塞进去的）
-$fingerprints = New-Object System.Collections.Generic.List[string]
-$fingerprints.Add("# 由 build.ps1 生成 —— release\ 里二进制的 SHA256 / 字节数，CI 会核对（见 .github\workflows\ci.yml）")
-
-foreach ($pair in @(@($dllPath, "$modId.dll"), @($pckPath, "$modId.pck"))) {
-    $target = Join-Path $releaseDir $pair[1]
-    $before = if (Test-Path $target) { (Get-FileHash $target -Algorithm SHA256).Hash } else { "" }
-    Copy-Item $pair[0] $target -Force
-    $after = (Get-FileHash $target -Algorithm SHA256).Hash
-    $fingerprints.Add("$($pair[1]) sha256=$after bytes=$((Get-Item $target).Length)")
-    if ($before -ne $after) {
-        Write-Host "已更新 release\$($pair[1]) —— 记得和源码一起提交" -ForegroundColor Yellow
-    } else {
-        Write-Host "release\$($pair[1]) 与本次构建一致（无需提交）"
-    }
-}
-
-$fingerprintPath = Join-Path $releaseDir "ARTIFACTS.txt"
-$newFingerprint = ($fingerprints -join "`r`n") + "`r`n"
-$oldFingerprint = if (Test-Path $fingerprintPath) { [System.IO.File]::ReadAllText($fingerprintPath) } else { "" }
-if ($oldFingerprint -ne $newFingerprint) {
-    [System.IO.File]::WriteAllText($fingerprintPath, $newFingerprint, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host "已更新 release\ARTIFACTS.txt —— 记得和源码一起提交" -ForegroundColor Yellow
-} else {
-    Write-Host "release\ARTIFACTS.txt 与本次构建一致（无需提交）"
-}
 # ── 4. 安装到 游戏目录\mods\<ModId>\ ────────────────────────────────────────
 Write-Step "安装"
 

@@ -15,7 +15,6 @@ game_dir.txt
 # 打包后误留的临时目录
 _pck_src/
 
-# 注意：release/ 里的 dll / pck / ARTIFACTS.txt 是**故意提交**的构建产物 ——
-# 公共 CI 装不了游戏本体（sts2.dll 等不能进公开仓库）也就编译不了，
-# 所以本地 build.ps1 构建后提交，Actions 才能在打 tag 时自动发版（见 release/README.md）。
+# 构建产物（不进仓库）：CI 在 Actions 里自己编译打包（.github/actions/build-mod），
+# 本地 build.ps1 的产物只装进游戏目录 / 留在 bin、dist 下。
 

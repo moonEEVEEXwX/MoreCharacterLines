@@ -1,0 +1,54 @@
+name: 构建 mod
+description: 用 NuGet 引用程序集编译 DLL + 打包台词 PCK + 组装发布 zip（公共 runner 上不需要游戏本体）
+
+# 为什么能在这里编译：本地开发引用游戏本体里的 sts2.dll / GodotSharp.dll / 0Harmony.dll，
+# 但这些 DLL 不能进公开仓库 → 公共 CI 上改用 NuGet 的「只留元数据」引用程序集
+# （FuYnAloft.Sts2.References + 官方 GodotSharp），csproj 里靠 $(CI)=true 自动切换。
+# 详见 README「CI / 发版」。
+
+inputs:
+  expect-version:
+    description: 期望的版本号（例如 tag 名 v0.1.1）；非空时与 mod_manifest.json 的 version 不一致直接失败
+    required: false
+    default: ''
+  artifact-name:
+    description: 上传 artifact 用的名字；留空则不上传（发版时走 Release 附件）
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: 安装 .NET 9 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: 安装 Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: 校验台词文件（语法 + 语义闸门）
+      shell: bash
+      run: python check_lines.py assets/MoreCharacterLines/lines.json
+
+    - name: 编译 DLL
+      shell: bash
+      run: dotnet build MoreCharacterLines.csproj -c Release -v minimal
+
+    - name: 打包台词 PCK
+      shell: bash
+      run: python pack_godot_pck.py assets -o bin/MoreCharacterLines.pck --engine-version 4.5.1 --pack-version 3
+
+    - name: 组装发布 zip
+      shell: bash
+      run: python tools/make_release_zip.py --expect-version "${{ inputs.expect-version }}"
+
+    - name: 上传 artifact（可直接解压进 mods/）
+      if: inputs.artifact-name != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: dist/*.zip
+        if-no-files-found: error

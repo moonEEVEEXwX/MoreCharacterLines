@@ -1,6 +1,8 @@
 name: CI
 
-# 只跑"不需要游戏本体"的检查 —— 编译与预检需要游戏目录里的 DLL，跑不了（见 README「开发」）。
+# 这里跑的都是"不需要游戏本体"的检查与构建：
+# 公共 runner 上没有 sts2.dll，所以编译走 NuGet 上的「只留元数据」引用程序集（见 .github/actions/build-mod）。
+
 on:
   push:
     branches: [ main ]
@@ -8,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  lines:
+  checks:
     name: 台词与工程约定
     runs-on: ubuntu-latest
     steps:
@@ -54,7 +56,8 @@ jobs:
           if not (assets / 'lines.json').is_file():
               errors.append(f'找不到 assets/{mod_id}/lines.json（PCK 里那份出厂台词）')
 
-          for f in ('build.ps1', 'check_lines.py', 'fix-encoding.ps1', 'pack_godot_pck.py'):
+          for f in ('build.ps1', 'check_lines.py', 'fix-encoding.ps1', 'pack_godot_pck.py',
+                    'tools/make_release_zip.py', '.github/actions/build-mod/action.yml'):
               if not (root / f).is_file():
                   errors.append(f'缺少 {f}')
 
@@ -65,10 +68,13 @@ jobs:
           print(f'清单 OK：id={mod_id} version={manifest["version"]} min_game_version={manifest["min_game_version"]}')
           PY
 
-      # 二进制（dll/pck）是本地 build.ps1 构建后提交的 —— 这里核对指纹 + 演练打包，
-      # 保证 tag 触发 release.yml 时一定能组装出发布包。
-      - name: release/ 产物指纹核对
-        run: python tools/check_release_artifacts.py
+  build:
+    name: 编译与打包
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: 打包演练（组装发布 zip，不发布）
-        run: python tools/make_release_zip.py
+      - uses: ./.github/actions/build-mod
+        with:
+          # 每个 push 都留一个"解压即装"的 zip，小改动不用发版也能拿最新的
+          artifact-name: MoreCharacterLines-r${{ github.run_number }}

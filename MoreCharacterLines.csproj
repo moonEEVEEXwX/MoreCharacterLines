@@ -8,26 +8,53 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <OutputPath>bin\Release\net9.0\</OutputPath>
+    <OutputPath>bin/Release/net9.0/</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 
-    <!-- 游戏数据目录（sts2.dll / GodotSharp.dll / 0Harmony.dll 所在处）。
-         build.ps1 会自动探测并通过 -p:Sts2Dir=... 覆盖这里。 -->
-    <Sts2Dir Condition="'$(Sts2Dir)' == ''">E:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\data_sts2_windows_x86_64</Sts2Dir>
+    <!-- 引用来源二选一：
+         ① 本地（默认）：游戏本体里的 sts2.dll / GodotSharp.dll / 0Harmony.dll
+            （build.ps1 会自动探测游戏目录，用 -p:Sts2Dir=... 传进来）
+         ② CI：NuGet 上的「只留元数据、没有 IL」的引用程序集 —— 公共 runner 上不需要游戏本体也能编译
+            入口：环境变量 CI=true（GitHub Actions 自带），或显式 -p:UseSts2NuGetRefs=true -->
+    <UseSts2NuGetRefs Condition="'$(UseSts2NuGetRefs)' == ''">$(CI)</UseSts2NuGetRefs>
+
+    <!-- 引用包版本跟游戏版本走（见 README「CI / 发版」）；改这里要同时改 mod_manifest.json 的 min_game_version -->
+    <Sts2RefsVersion Condition="'$(Sts2RefsVersion)' == ''">0.111.0-beta</Sts2RefsVersion>
+    <GodotSharpVersion Condition="'$(GodotSharpVersion)' == ''">4.5.1</GodotSharpVersion>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseSts2NuGetRefs)' != 'true'">
     <Reference Include="sts2">
-      <HintPath>$(Sts2Dir)\sts2.dll</HintPath>
+      <HintPath>$(Sts2Dir)/sts2.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="GodotSharp">
-      <HintPath>$(Sts2Dir)\GodotSharp.dll</HintPath>
+      <HintPath>$(Sts2Dir)/GodotSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>$(Sts2Dir)\0Harmony.dll</HintPath>
+      <HintPath>$(Sts2Dir)/0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
+  <ItemGroup Condition="'$(UseSts2NuGetRefs)' == 'true'">
+    <!-- 社区维护的 StS2 引用程序集：Refasmer 剥离 IL、保留元数据与访问修饰符，专为 CI 用。
+         版权归 Mega Crit；这里只是编译期引用，不会打进产物、产物里也不会带它。 -->
+    <PackageReference Include="FuYnAloft.Sts2.References" Version="$(Sts2RefsVersion)" PrivateAssets="all" />
+    <!-- Godot 官方 NuGet 包（MIT）。游戏用 Godot 4.5.1，所以版本要对齐。
+         引用包刻意不含 GodotSharp，避免和 SDK 里的冲突。 -->
+    <PackageReference Include="GodotSharp" Version="$(GodotSharpVersion)" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- tools/ 下是开发/预检工具，不是 mod 代码：默认的 *.cs 通配会把它们编进 DLL -->
+  <ItemGroup>
+    <Compile Remove="tools/**" />
+  </ItemGroup>
+
+  <!-- 本地构建忘了给游戏目录时，别说一堆找不到 HintPath 的废话，直接给人话 -->
+  <Target Name="CheckSts2Dir" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(UseSts2NuGetRefs)' != 'true' and !Exists('$(Sts2Dir)\sts2.dll')">
+    <Error Text="找不到 $(Sts2Dir)\sts2.dll —— 本地构建请用 build.ps1（它会自动探测游戏目录），或加 -p:Sts2Dir=&lt;游戏目录&gt;\data_sts2_windows_x86_64；CI 上加 -p:UseSts2NuGetRefs=true 改用 NuGet 引用程序集。" />
+  </Target>
 </Project>

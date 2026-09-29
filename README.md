@@ -33,9 +33,11 @@
 
 ## 安装
 
-1. 到 [Releases](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases) 下载 `MoreCharacterLines_v0.1.0.zip`，解压得到 `MoreCharacterLines` 文件夹；
-   （也可以自己构建，见 [开发](#开发)。）
-2. 整个文件夹丢进游戏目录：
+1. 拿一个发布包（二选一）：
+   - **稳定版**：到 [Releases](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases) 下载 `MoreCharacterLines_v*.zip`；
+   - **最新构建**（每次 push 自动出）：到 [Actions](https://github.com/moonEEVEEXwX/MoreCharacterLines/actions/workflows/ci.yml)
+     选最新一次成功的运行，页面底部 **Artifacts** 里下载 `MoreCharacterLines-r*`，同样解压即装。
+2. 解压得到 `MoreCharacterLines` 文件夹，整个丢进游戏目录：
 
    ```
    Slay the Spire 2/
@@ -128,13 +130,13 @@ mod 角色直接用它的角色 ID 当键即可（例如 `"WATCHER"`），**不�
 | [`assets/MoreCharacterLines/lines.json`](assets/MoreCharacterLines/lines.json) | 出厂台词（打包进 PCK；头部注释就是写作指南） |
 | [`tools/preflight`](tools/preflight) | 预检工具：**不开游戏**跑 84 项断言（补丁挂点、反射目标、抽取逻辑、ping 规则、JSON 解析） |
 | [`check_lines.py`](check_lines.py) | 台词文件语法 + 语义闸门（少逗号、ping 里写旁白括号、未知 BBCode……） |
-| [`tools/make_release_zip.py`](tools/make_release_zip.py) | 把仓库里的东西组装成可安装的发布 zip（本机 / CI / 发版共用同一份逻辑） |
-| [`release/`](release) | **提交进仓库的构建产物**（`dll` + `pck` + `ARTIFACTS.txt`）：公共 CI 编译不了，只能本地构建后提交 |
+| [`tools/make_release_zip.py`](tools/make_release_zip.py) | 把 dll/pck + 清单 + 台词 + 文档组装成"解压即装"的发布 zip（本机 / CI / 发版共用同一份逻辑） |
+| [`.github/actions/build-mod`](.github/actions/build-mod/action.yml) | CI 里的构建步骤：装 SDK → 编译 → 打包 PCK → 组装 zip（push 与发版共用） |
 
 ## 开发
 
 ```powershell
-# 构建 + 安装（改完 assets 里的台词也必须跑一次）
+# 构建 + 安装（改完 assets 里的台词也必须跑一次；不需要 .NET 9 SDK，会自动回退到 Roslyn）
 powershell -ExecutionPolicy Bypass -File build.ps1
 
 # 只校验台词文件（少逗号会报行号）
@@ -144,23 +146,32 @@ python check_lines.py assets\MoreCharacterLines\lines.json
 powershell -ExecutionPolicy Bypass -File tools\preflight\build.ps1
 cd tools\preflight\bin
 dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreCharacterLines\MoreCharacterLines.dll"
-
-# 本地组装一个发布 zip（和 CI 发版用的是同一个脚本）
-python tools\make_release_zip.py
 ```
 
 ### CI / 发版
 
-`push` 时（[`ci.yml`](.github/workflows/ci.yml)）跑不需要游戏本体的检查：
-**台词校验 + 所有 `.ps1` 的 BOM 闸门 + 清单字段检查 + `release/` 产物指纹核对 + 打包演练**。
+**Actions 会自己编译**（[`ci.yml`](.github/workflows/ci.yml) → [`.github/actions/build-mod`](.github/actions/build-mod/action.yml)）：
 
-打 tag 时（[`release.yml`](.github/workflows/release.yml)）自动发版：
-组装 `MoreCharacterLines_v<版本>.zip` → 建 GitHub Release（附自动生成的更新说明）。
-tag 名和 `mod_manifest.json` 里的 `version` 不一致会**直接失败**，避免发错版本号。
+| 时机 | 会做什么 |
+|---|---|
+| 每次 `push` / PR | 台词闸门 + `.ps1` BOM 闸门 + 清单检查，然后**编译 + 打包 PCK + 组装 zip**，把 `MoreCharacterLines-r<运行号>.zip` 传成 **Artifact**（运行页面底部可下载，解压即装）—— 小改动不用发版就能拿到最新构建 |
+| 打 `v*` tag | 拉 [`release.yml`](.github/workflows/release.yml)：同样编译打包 → 建 **GitHub Release** 并挂上 zip（附自动生成的更新说明）。tag 名与 `mod_manifest.json` 的 `version` 不一致会**直接失败**，避免发错版本号 |
 
-**编译与预检跑不了**（要游戏目录里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，版权原因不能进公开仓库），
-所以流程是「**本地构建 → 提交 `release/` 里的 dll+pck → 打 tag 自动发版**」；
-`release/ARTIFACTS.txt` 是 `build.ps1` 写的指纹，CI 靠它确认提交的二进制没被手工换过。
+**公共 runner 上没有游戏本体，怎么编译的？** 本地开发引用游戏目录里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，
+但这些文件有版权、不能进公开仓库。CI 上换成 NuGet 上的引用程序集：
+
+- [`FuYnAloft.Sts2.References`](https://www.nuget.org/packages/FuYnAloft.Sts2.References) —— 社区维护的 StS2 引用程序集，
+  用 Refasmer **剥掉了全部 IL、只留元数据**（不含任何可运行的游戏代码），版本号跟着游戏版本走（我们用 `0.111.0-beta`）；
+- [`GodotSharp`](https://www.nuget.org/packages/GodotSharp) 4.5.1 —— Godot 官方包（MIT），版本与游戏所用引擎对齐。
+
+`csproj` 靠环境变量 `CI=true` 自动切换（本地用游戏本体、CI 用 NuGet），也可以在本地显式验证 CI 那条路：
+
+```powershell
+dotnet build MoreCharacterLines.csproj -c Release -p:UseSts2NuGetRefs=true
+```
+
+> 已验证：用 NuGet 引用程序集编译出的 DLL，预检 **84 项断言全过**，与游戏本体引用编译的版本行为一致
+> （两者只有 AssemblyRef 顺序不同导致的字节差异；产物里**不含**任何引用包内容）。
 
 工程约定（都是踩过坑的）：
 
@@ -168,6 +179,7 @@ tag 名和 `mod_manifest.json` 里的 `version` 不一致会**直接失败**，�
   丢了就跑 `fix-encoding.ps1`（递归扫全仓库）。**用编辑器改完 `.ps1` 请顺手跑一次**（有些编辑器会吃掉 BOM）。
 - `build.ps1` **不覆盖**已存在的 `lines.json`，但会提示"和仓库不一致"；加 `-SyncLines` 用仓库版本覆盖。
 - 只有 .NET 8 SDK 时，脚本会自动回退到 Roslyn(csc) 编译 + 游戏自带的 .NET 9 程序集，不用额外装 SDK。
+- `tools/` 下是开发工具、不是 mod 代码：`csproj` 与 `build.ps1` 都把它排除在编译之外（否则预检工具会被编进 DLL）。
 
 ## 已知限制
 
