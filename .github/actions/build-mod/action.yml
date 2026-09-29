@@ -45,6 +45,21 @@ runs:
       shell: bash
       run: python tools/make_release_zip.py --expect-version "${{ inputs.expect-version }}"
 
+    - name: 产物指纹写进运行摘要（方便核对"这个 artifact 到底是哪次构建"）
+      shell: bash
+      run: |
+        {
+          echo "### 构建产物"
+          echo ""
+          echo "| 文件 | 大小 | SHA256 |"
+          echo "|---|---|---|"
+          for f in bin/Release/net9.0/MoreCharacterLines.dll bin/MoreCharacterLines.pck dist/MoreCharacterLines_v*.zip; do
+            if [ -f "$f" ]; then
+              printf '| `%s` | %s B | `%s` |\n' "$(basename "$f")" "$(stat -c%s "$f")" "$(sha256sum "$f" | cut -d' ' -f1)"
+            fi
+          done
+        } >> "$GITHUB_STEP_SUMMARY"
+
     - name: 上传 artifact（可直接解压进 mods/）
       if: inputs.artifact-name != ''
       uses: actions/upload-artifact@v4
