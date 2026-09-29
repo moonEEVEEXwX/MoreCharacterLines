@@ -1,4 +1,4 @@
-<#
+﻿<#
   MoreCharacterLines 构建脚本（Windows）
   用法：
       powershell -ExecutionPolicy Bypass -File build.ps1
@@ -186,7 +186,7 @@ function Install-Files([string]$dest) {
 
         # 比对内容（忽略 BOM 与换行差异）：装的是新 DLL、台词文件却还是旧的，
         # 会让新功能/新池子静默不生效 —— 这个坑踩过两次，所以这里必须出声。
-        $destText = $utf8.GetString($bytes).Replace([char]0xFEFF, '').Replace("`r`n", "`n")
+        $destText = $utf8.GetString($bytes).TrimStart([char]0xFEFF).Replace("`r`n", "`n")
         $srcText  = [System.IO.File]::ReadAllText($linesSrc, $utf8).Replace("`r`n", "`n")
         $stale = $destText -ne $srcText
 
