@@ -628,6 +628,13 @@ ildump.exe "<...>\sts2.dll" findstr "\"要搜的字符串\""
 ildump.exe "<...>\sts2.dll" findcall "方法名"
 ```
 
+### 推送到 GitHub 的约定（玩家已授权 AI 代推）
+
+> - **默认由 AI `git push`**：每次沙箱会弹一次放权确认，玩家点一下即可（等于每次推送都过一次人手）。
+> - **AI 承诺**：只推本仓库 `main`；**绝不** force push、绝不改写已发布历史；
+>   推前检查有没有密钥、Steam ID、本机绝对路径之类不该外露的东西；
+>   推完在对话里报 `commit hash + 一句话`，方便玩家核查（`git log origin/main -3` 或 GitHub 提交页）。
+> - 玩家随时可以自己 `git push`（走同一个 GCM 凭据），或收回这条授权。
 ### 下一个任务（玩家指定顺序）
 
 > 改名（`MoreCharacterLines`）和 ping 接入都已经做完。下一步见下。
