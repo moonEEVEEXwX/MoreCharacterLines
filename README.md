@@ -3,6 +3,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Game](https://img.shields.io/badge/Slay%20the%20Spire%202-v0.111.0-orange.svg)](#兼容性与边界)
 [![Mod type](https://img.shields.io/badge/mod-pure%20cosmetic-lightgrey.svg)](#兼容性与边界)
+[![CI](https://github.com/moonEEVEEXwX/MoreCharacterLines/actions/workflows/ci.yml/badge.svg)](https://github.com/moonEEVEEXwX/MoreCharacterLines/actions/workflows/ci.yml)
 
 > 给《杀戮尖塔 2》里那些**固定的文案**，配上「按**角色** / 按**状态**」随机抽取的台词。
 >
@@ -140,6 +141,11 @@ powershell -ExecutionPolicy Bypass -File tools\preflight\build.ps1
 cd tools\preflight\bin
 dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreCharacterLines\MoreCharacterLines.dll"
 ```
+
+CI（GitHub Actions）每次 push 会跑：**台词校验 + 所有 `.ps1` 的 BOM 闸门 + 清单字段检查** ——
+这三样都不需要游戏本体，所以在公共 runner 上就能跑。
+**编译与预检跑不了**（要游戏目录里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，不能进公开仓库），
+本地 `build.ps1` + `tools\preflight\build.ps1` 负责。
 
 工程约定（都是踩过坑的）：
 

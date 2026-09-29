@@ -1,0 +1,66 @@
+name: CI
+
+# 只跑"不需要游戏本体"的检查 —— 编译与预检需要游戏目录里的 DLL，跑不了（见 README「开发」）。
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lines:
+    name: 台词与工程约定
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 台词文件校验（语法 + 语义闸门）
+        run: python check_lines.py assets/MoreCharacterLines/lines.json
+
+      - name: 所有 .ps1 必须是 UTF-8 with BOM
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            bom=$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')
+            if [ "$bom" != "efbbbf" ]; then
+              echo "::error file=$f::缺少 UTF-8 BOM —— Windows PowerShell 5.1 会按 GBK 读取，中文注释会直接导致语法错误（本地跑 fix-encoding.ps1 修）"
+              fail=1
+            fi
+          done < <(git ls-files '*.ps1')
+          exit $fail
+
+      - name: 清单字段与三件套命名一致
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+
+          root = pathlib.Path('.')
+          manifest = json.loads((root / 'mod_manifest.json').read_text(encoding='utf-8'))
+          mod_id = manifest.get('id')
+          errors = []
+
+          for field in ('id', 'name', 'version', 'author', 'min_game_version', 'has_dll', 'has_pck'):
+              if not manifest.get(field):
+                  errors.append(f'清单缺少字段 {field}')
+
+          if manifest.get('pck_name') and manifest['pck_name'] != mod_id:
+              errors.append(f"pck_name({manifest['pck_name']}) 与 id({mod_id}) 不一致")
+
+          assets = root / 'assets' / (mod_id or '')
+          if not (assets / 'lines.json').is_file():
+              errors.append(f'找不到 assets/{mod_id}/lines.json（PCK 里那份出厂台词）')
+
+          for f in ('build.ps1', 'check_lines.py', 'fix-encoding.ps1', 'pack_godot_pck.py'):
+              if not (root / f).is_file():
+                  errors.append(f'缺少 {f}')
+
+          if errors:
+              for e in errors:
+                  print(f'::error::{e}')
+              sys.exit(1)
+          print(f'清单 OK：id={mod_id} version={manifest["version"]} min_game_version={manifest["min_game_version"]}')
+          PY
