@@ -295,7 +295,13 @@ git push -u origin main
 
 ## 7. 调试
 
-日志：`%AppData%\SlayTheSpire2\logs\godot<时间>.log`，搜 `MoreCharacterLines`：
+日志：`%AppData%\SlayTheSpire2\logs\godot<时间>.log`，搜 `MoreCharacterLines`。
+
+> 有两条**看着吓人、其实正常**的日志：
+> - `Caught System.Text.Json.JsonReaderException ... mods\MoreCharacterLines\lines.json` ——
+>   游戏会把 mod 文件夹里**每个 `.json` 都当清单试解析**，我们这份带 `//` 注释的台词文件当然解析不了。无害。
+> - `Mod MoreCharacterLines does not declare min game version` —— 旧版清单没声明最低游戏版本；
+>   现在清单里已经有 `min_game_version`，这条会消失。
 
 - `[MoreCharacterLines] loaded.` —— 加载成功
 - `[MoreCharacterLines] 已生成可编辑台词文件：...` —— 台词文件生成位置
@@ -304,7 +310,7 @@ git push -u origin main
 - `[MoreCharacterLines] JSON 格式有误：...` —— 台词文件写错（会自动退回下一份）
 
 ping 不生效？按顺序查：① **`mods\MoreCharacterLines\lines.json` 是不是旧的**
-（`build.ps1` 不覆盖已存在的台词文件，新版本要手动同步那份）；
+（`build.ps1` 默认不覆盖已存在的台词文件，但会**警告内容不一致**；加 `-SyncLines` 就用仓库版本覆盖）；
 ② 是不是死人在催（死人保持原版）；③ 日志里有没有 `催促台词` 那行 —— 没有就是抽取没命中，
 ping 那边**故意没有** `DEFAULT` 通用池，所以"这个角色没写专属池"= 保持游戏原句（这是预期的，不是 bug）。
 
@@ -390,8 +396,10 @@ ping：NPingButton.OnRelease → FlavorSynchronizer.SendEndTurnPing()
   - **火堆**：取「本地玩家」的角色，两台机器看到的可能不同（纯外观，不影响联机判定）。
     想统一取 1 号位玩家，把 `PlayerContext.FromRunState()` 里的 `LocalContext.GetMe(...)` 去掉。
 - 只改火堆顶部提示语，不改休息 / 锻造选项的说明文字。
-- ping 的同一档位内重复催会说同一句（换回合 / 升档才换）—— 这是"两端一致"换来的，
-  详见 `DESIGN.md` §2。
+- **ping 每次按基本都会换一句**（默认 `_ping.perPingVariety: true`）：两端各自数"第几次"，
+  正常完全同步；万一丢包会错开一位，但**升档 / 换回合时自动重新对齐**。
+  想改成"同回合同档位永远同一句"就把 `perPingVariety` 设成 `false`（详见 `DESIGN.md` §2）。
+- ping **没有 `DEFAULT` 通用池**：没写专属池的角色（含观者、蕾忍这类 mod 角色）保持游戏原句，不被改写。
 - 台词不随游戏语言切换（要多语言可把 JSON 改成 `{"zhs": {...}, "eng": {...}}`，
   再用 `LocManager.Instance.Language` 选一份）。
 - 游戏更新后若私有成员改名，反射会失败：日志报错，表现是**保持原版文案**，不会崩。

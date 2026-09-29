@@ -1,9 +1,10 @@
-﻿<#
+<#
   MoreCharacterLines 构建脚本（Windows）
   用法：
       powershell -ExecutionPolicy Bypass -File build.ps1
       powershell -ExecutionPolicy Bypass -File build.ps1 -GameDir "X:\...\Slay the Spire 2"
       powershell -ExecutionPolicy Bypass -File build.ps1 -OutDir "D:\somewhere"     # 只编译，不装进游戏目录
+      powershell -ExecutionPolicy Bypass -File build.ps1 -SyncLines                 # 安装目录的 lines.json 与仓库不一致时，用仓库的覆盖
 
   步骤：
     1) 编译 MoreCharacterLines.dll
@@ -14,7 +15,9 @@
 param(
     [string]$GameDir = "",
     [string]$OutDir = "",
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    # 安装目录里的 lines.json 与仓库不一致时，直接用它覆盖（默认只警告、不动它）
+    [switch]$SyncLines
 )
 
 $ErrorActionPreference = "Stop"
@@ -171,16 +174,34 @@ function Install-Files([string]$dest) {
     # 已存在就不覆盖（避免吞掉别人改好的台词）；若老文件没有 UTF-8 BOM 则补一个，
     # 这样记事本 / PowerShell 这类 Windows 工具打开中文不会乱码。
     $linesDest = Join-Path $dest "lines.json"
+    $linesSrc = Join-Path $projectDir "assets\$modId\lines.json"
     if (-not (Test-Path $linesDest)) {
-        $text = [System.IO.File]::ReadAllText((Join-Path $projectDir "assets\$modId\lines.json"), (New-Object System.Text.UTF8Encoding($false)))
+        $text = [System.IO.File]::ReadAllText($linesSrc, (New-Object System.Text.UTF8Encoding($false)))
         [System.IO.File]::WriteAllText($linesDest, $text, (New-Object System.Text.UTF8Encoding($true)))
         Write-Host "已放入可编辑台词文件：$linesDest"
     } else {
         $bytes = [System.IO.File]::ReadAllBytes($linesDest)
         $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
-        if ($hasBom) {
-            Write-Host "保留已有的台词文件（不覆盖）：$linesDest"
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+        # 比对内容（忽略 BOM 与换行差异）：装的是新 DLL、台词文件却还是旧的，
+        # 会让新功能/新池子静默不生效 —— 这个坑踩过两次，所以这里必须出声。
+        $destText = $utf8.GetString($bytes).Replace([char]0xFEFF, '').Replace("`r`n", "`n")
+        $srcText  = [System.IO.File]::ReadAllText($linesSrc, $utf8).Replace("`r`n", "`n")
+        $stale = $destText -ne $srcText
+
+        if ($stale -and $SyncLines) {
+            [System.IO.File]::WriteAllText($linesDest, $srcText, (New-Object System.Text.UTF8Encoding($true)))
+            Write-Host "已用仓库里的台词文件覆盖安装目录那份（-SyncLines）：$linesDest" -ForegroundColor Yellow
+        } elseif ($stale) {
+            Write-Host "⚠ 安装目录里的 lines.json 和仓库里的**不一样**：$linesDest" -ForegroundColor Yellow
+            Write-Host "   如果那不是在游戏里手改的台词，新池子/新功能会读不到 —— 想直接用仓库版本就加 -SyncLines，或手动复制：" -ForegroundColor Yellow
+            Write-Host "     copy `"$linesSrc`" `"$linesDest`"" -ForegroundColor Yellow
         } else {
+            Write-Host "保留已有的台词文件（内容与仓库一致）：$linesDest"
+        }
+
+        if (-not $hasBom -and -not ($stale -and $SyncLines)) {
             # 只有确认是合法 UTF-8 才动它，避免把 GBK 之类的文件改坏
             try {
                 $strict = New-Object System.Text.UTF8Encoding($false, $true)

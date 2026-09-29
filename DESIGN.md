@@ -487,8 +487,8 @@ girya_progress  ← 还没练满时的鼓励
   角色个性交给 `normal` / `low_hp` 承载就够了。真想单独定制时，
   在某个角色那段里加同名池即可（机制支持，只是不作为默认内容）。
 - 首次获得某遗物时提高一次占比（"新玩具"加权），之后回归常态
-- **每次 ping 换一句**（而不是同一档位内重复同一句）：要把种子换成「本回合该玩家第几次 ping」，
-  但 `EndTurnPingMessage` 走不可靠通道，丢包会让两端计数器错位；先记在这里，真有需求再评估
+- ~~每次 ping 换一句~~ → **已做**（`_ping.perPingVariety`，默认开）：计数器漂移用"升档 / 换回合归零"自愈；
+  想要 100% 严格一致随时可以关掉（见 §4 与 §9）
 - 多语言：把 JSON 改成 `{"zhs": {...}, "eng": {...}}`，用 `LocManager.Instance.Language` 选一份
 
 **P3 — 工程**
@@ -585,7 +585,7 @@ girya_progress  ← 还没练满时的鼓励
 |---|---|
 | 火堆场景 | ✅ 已接：14 个条件（低血 / 蜡烛 / 壶铃 ×2 / 10 种遗物），优先级与概率见 §4 |
 | 五角色口吻考证 | ✅ 全部完成（§5.1，每条都附游戏原文实例） |
-| 台词量 | 89 句（`rest_site`）+ 44 句（`ping`：五角色 × 正常/更急/更凶 + 通用池） |
+| 台词量 | 89 句（`rest_site`）+ 36 句（`ping`：五角色 × 正常/更急/更凶；**无通用池**，mod 角色保持原句） |
 | mod 命名 | ✅ 已改名 **`MoreCharacterLines`**（显示名「更多角色台词」，版本 `0.1.0`）：工程目录、`mods\` 安装目录、AppData 数据目录、预检脚本全部同步；旧的 `mods\CharacterLines\` 与 `mods\RestSitePrompts\` 已删 |
 | 安装 | ✅ `游戏目录\mods\MoreCharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
 | ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
