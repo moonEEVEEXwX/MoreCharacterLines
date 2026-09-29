@@ -590,13 +590,15 @@ girya_progress  ← 还没练满时的鼓励
 | 安装 | ✅ `游戏目录\mods\MoreCharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
 | ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
-| git | ✅ 干净（改名提交见 `git log -1`；改名前的历史停在 `095a9ef`） |
+| git | ✅ **已开源**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，GPL-3.0）。提交署名统一 `Dsh (vibecoding) <dsh@example.com>`（33 个历史提交已重写，文件内容零改动）；**push 要在玩家自己的终端跑**（AI 会话的沙箱里 `sh.exe` 被禁 → git 凭据助手起不来） |
 
 ### 关键路径
 
 | 东西 | 位置 |
 |---|---|
 | 工程 | `D:\sts2modtest\MoreCharacterLines\` |
+| 远端仓库（公开） | <https://github.com/moonEEVEEXwX/MoreCharacterLines>（GPL-3.0） |
+| 历史备份（重写署名前的完整历史） | `D:\sts2modtest\MoreCharacterLines_backup.bundle`（`git bundle` 全量，147 KB） |
 | 台词（源码，会被打包进 PCK） | `assets\MoreCharacterLines\lines.json` |
 | 台词（游戏里可就地改的那份） | `游戏目录\mods\MoreCharacterLines\lines.json` |
 | 构建 / 语法闸门 | `build.ps1` + `check_lines.py`（`fix-encoding.ps1` 修 BOM） |

@@ -291,15 +291,16 @@ git add -A
 git commit -m "加了低血台词"
 ```
 
-第一次推 GitHub 前先改成你自己的身份：
+**已发布**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，许可 GPL-3.0）。
+提交署名统一是 `Dsh (vibecoding) <dsh@example.com>`；日常就是上面三步 + 一条推送：
 
 ```powershell
-git config user.name  "你的名字"
-git config user.email "你的邮箱@example.com"
-git remote add origin https://github.com/你的用户名/仓库名.git
-git branch -M main
-git push -u origin main
+git push
 ```
+
+> 第一次 push 会弹浏览器授权（Git Credential Manager），点一下 **Authorize** 就好，之后会记住。
+> 如果代码是在 AI 会话里改的，push 这一步通常得**你自己在终端跑** ——
+> 沙箱环境里 `sh.exe` 起不来，git 的凭据助手没法工作。
 
 ---
 
