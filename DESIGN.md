@@ -590,7 +590,7 @@ girya_progress  ← 还没练满时的鼓励
 | 安装 | ✅ `游戏目录\mods\MoreCharacterLines\`（含可编辑 `lines.json` 与 `DESIGN.md`） |
 | ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
-| git | ✅ **已开源**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，GPL-3.0）。提交署名统一 `Dsh (vibecoding) <dsh@example.com>`（33 个历史提交已重写，文件内容零改动）；**push 要在玩家自己的终端跑**（AI 会话的沙箱里 `sh.exe` 被禁 → git 凭据助手起不来） |
+| git | ✅ **已开源**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，GPL-3.0）。提交署名统一 `Dsh (vibecoding) <dsh@example.com>`（33 个历史提交已重写，文件内容零改动）；**push 两种都行**：玩家终端直接 `git push`；或让 AI 推（沙箱默认会拦 `sh.exe` → 需要一次性放权授权，放行后凭据可复用） |
 
 ### 关键路径
 
