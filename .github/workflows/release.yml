@@ -26,7 +26,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --notes-file 的固定说明（兼容性 / 安装 / 已知限制）+ --generate-notes 的自动 changelog
+          # gh 会把两者拼起来：body = 文件内容 + 自动生成的改动列表
           gh release create "$GITHUB_REF_NAME" dist/*.zip \
             --title "更多角色台词 $GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md \
             --generate-notes
           echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"

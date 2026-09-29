@@ -57,7 +57,8 @@ jobs:
               errors.append(f'找不到 assets/{mod_id}/lines.json（PCK 里那份出厂台词）')
 
           for f in ('build.ps1', 'check_lines.py', 'fix-encoding.ps1', 'pack_godot_pck.py',
-                    'tools/make_release_zip.py', '.github/actions/build-mod/action.yml'):
+                    'tools/make_release_zip.py', '.github/actions/build-mod/action.yml',
+                    '.github/release-notes.md', '.github/workflows/release.yml'):
               if not (root / f).is_file():
                   errors.append(f'缺少 {f}')
 

@@ -30,6 +30,12 @@
 3. **数据驱动**：能写进 `lines.json` 的，不写进 C#。
    代码里只放"什么时候该说什么"（条件判定），不放"说什么"（台词文本）。
 4. **可测**：能在不开游戏的情况下验证的逻辑，就抽成纯函数（见 §7）。
+5. **不做兼容承诺**：只声明并测试**当前 public-beta 分支的版本**（现在 `v0.111.0`）。
+   正式分支 `v0.107.0` 更旧、**未测试**；游戏还在 EA、下个版本预告有大改（新角色、新二层等），
+   接口一变本 mod 可能直接失效 —— 所以**不写"兼容更高版本"、不写"以后也能用"**，
+   宁可对不上版本时被 `min_game_version` 拒绝加载，也不要装了崩。相关措辞见 §5/§9。
+6. **不写"保证你会"的话**：文档（README / Release 说明）里不放"30 秒上手""一看就会"这类营销式承诺 ——
+   用户拿到手能不能立刻弄明白、能不能自己解决，我们**不保证**；只陈述"是什么、怎么装、怎么改、做不到什么"。
 
 ---
 
@@ -56,6 +62,7 @@
 | `.github/actions/build-mod/action.yml` | CI 的构建步骤：装 .NET 9 SDK + Python → 台词闸门 → `dotnet build` → 打包 PCK → 组装 zip →（可选）上传 artifact |
 | `.github/workflows/ci.yml` | push / PR：`checks`（台词 + BOM + 清单）+ `build`（编译打包并上传 artifact） |
 | `.github/workflows/release.yml` | 打 tag 时：走同一个构建 action → 建 GitHub Release（tag 与 `mod_manifest.json` 版本不一致直接失败） |
+| `.github/release-notes.md` | Release 说明的固定开头（兼容性声明 / 安装 / 已知限制），由 `release.yml` 用 `--notes-file` 拼在自动 changelog 前面 |
 
 ### 数据流
 
@@ -542,6 +549,8 @@ girya_progress  ← 还没练满时的鼓励
 | tag 名必须等于 `mod_manifest.json` 的 `version` | 发版最烦的错是"zip 里的清单版本和 tag 对不上"；`--expect-version` 直接拦死 |
 | 构建步骤抽成 composite action（`.github/actions/build-mod`），push 与 tag 共用 | 两条流水线必须产出同样的东西；写两份 YAML 迟早漂移 |
 | 不用自托管 runner | 想让 Actions 拿到游戏本体的 DLL，另一条路是把 runner 装到玩家机器上；但那要常开一台机器、装服务、维护权限，而引用包方案零成本。**除非引用包被删或长期不同步**，否则不用自托管 |
+| **只适配 public-beta 分支 `v0.111.0`，明确不承诺更高版本**（玩家要求） | ① 作者在玩的是 public-beta，正式分支停在更旧的 `v0.107.0`，我们没那个环境测；② 开发组预告下个版本要大改（新角色、新二层环境等），内部接口很可能变 —— 与其写"兼容后续版本"再被打脸，不如把"只保证这一个版本"写清楚。清单里 `min_game_version = v0.111.0`，对不上就让游戏拒绝加载（不崩比能用更重要） |
+| README **不写"（30 秒）"这类承诺式措辞**（玩家明确删掉过一次） | 「30 秒上手」潜台词是"我保证你一下就能搞定"。现实是：不少人拿到手既不读文档也不提问，出了问题直接骂 —— 我们不做这种承诺，只写"能做什么 / 怎么装 / 怎么改 / 已知做不到什么"。同类词（"保证""一定会""兼容以后版本"）一律不写 |
 | **引用包方案已实测**：NuGet 引用编出来的 DLL 跑预检 **84 项全过** | 换编译方式最大的风险是"编出来的和本地不一样"。证据：① `sts2` / `0Harmony` / `GodotSharp` 三个程序集标识（Name / Version / PublicKeyToken）与游戏本体**完全一致**（运行时绑定没问题）；② 同一套源码、同一版 csc，游戏引用 vs NuGet 引用的产物**大小相同、只差 AssemblyRef 顺序**，NuGet 版预检 84/84 |
 | `tools/**` 排除出编译 | `Microsoft.NET.Sdk` 默认把项目下所有 `*.cs` 编进去 —— 预检工具 `Preflight.cs` 也被塞进 mod DLL，白白胖 24 KB（55808 → 31744 B）；`csproj` 加 `Compile Remove`，`build.ps1` 的 csc 源码扫描也同步排除 |
 | 引用包版本（`0.111.0-beta`）+ `GodotSharp`（`4.5.1`）与游戏版本强绑定 | 游戏 EA 期更新频繁，引用包按 Steam 分支发布（`-beta` = public-test 分支）。**升游戏版本时一起改三处**：`csproj` 的 `Sts2RefsVersion` / `GodotSharpVersion` + `mod_manifest.json` 的 `min_game_version`，并重跑预检 |
@@ -623,6 +632,7 @@ girya_progress  ← 还没练满时的鼓励
 | IL 阅读器（查游戏逻辑） | `D:\sts2modtest\_tools\ildump\ildump\bin\Release\net8.0\ildump.exe` |
 | PCK 工具（list / cat / extract） | `D:\sts2modtest\_tools\pck_tool.py` |
 | 游戏本地化导出（考证口吻用） | `D:\sts2modtest\_ref\loc_zhs`、`_ref\loc_eng` |
+| 游戏版本对应关系 | **public-beta `v0.111.0`**（作者在玩、唯一适配的版本）/ 正式分支 `v0.107.0`（更旧、**未测试**）；引用包 `Sts2RefsVersion` 跟 public-beta 走 |
 | 引用程序集（CI 用，NuGet） | `FuYnAloft.Sts2.References` `0.111.0-beta` + `GodotSharp` `4.5.1`（版本写在 `csproj` 顶部） |
 | 本机装的 .NET 9 SDK（只为复现 CI 那条编译路） | `D:\sts2modtest\_tools\dotnet9\dotnet.exe`（9.0.318，只解压到目录、没进 PATH） |
 | 本机 NuGet 包缓存 / 本地源（同上前提） | `_tools\nugetpackages`、`_tools\localnuget`（本机 NuGet 走不了代理，用本地源喂包） |
@@ -729,6 +739,8 @@ git tag v0.1.1; git push origin v0.1.1       # 触发 release.yml：Actions 自�
 - **CI 现在能自己编译**，靠的是 NuGet 上"只留元数据"的 StS2 引用程序集 + 官方 GodotSharp（见 §9）：
   - 升游戏版本时**三处一起改**：`csproj` 的 `Sts2RefsVersion` / `GodotSharpVersion` + `mod_manifest.json` 的 `min_game_version`，
     改完**必须重新编译 + 跑预检**（引用包和真游戏对不上时，编译能过、运行时才炸）；
+    ⚠️ 我们**只跟 public-beta**（正式分支 `v0.107.0` 更旧、没人测）；下个版本预告有大改
+    （新角色、新二层环境等），**不要默认"编译过了就还能用"** —— 补丁挂点、反射目标都得重新核对；
   - `dotnet build` 默认把**项目下所有 `*.cs`** 编进去 —— `tools/` 里的预检工具曾被塞进 mod DLL（+24 KB），
     `csproj` 与 `build.ps1` 都要排除；
   - 本机 NuGet 走不了代理时（restore 报 SSL/凭据错）：把 nupkg 下下来丢进一个目录，`--source <该目录>` 当本地源用。

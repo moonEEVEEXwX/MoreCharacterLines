@@ -2,18 +2,18 @@
 
 [![Release](https://img.shields.io/github/v/release/moonEEVEEXwX/MoreCharacterLines?label=release&color=green)](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-[![Game](https://img.shields.io/badge/Slay%20the%20Spire%202-v0.111.0-orange.svg)](#兼容性与边界)
+[![Game](https://img.shields.io/badge/game-public--beta%20v0.111.0-orange.svg)](#兼容性与边界)
 [![Mod type](https://img.shields.io/badge/mod-pure%20cosmetic-lightgrey.svg)](#兼容性与边界)
 [![CI](https://github.com/moonEEVEEXwX/MoreCharacterLines/actions/workflows/ci.yml/badge.svg)](https://github.com/moonEEVEEXwX/MoreCharacterLines/actions/workflows/ci.yml)
 
-> 给《杀戮尖塔 2》里那些**固定的文案**，配上「按**角色** / 按**状态**」随机抽取的台词。
+> 给《杀戮尖塔 2》里那些**固定的文案**，配上「按**角色** / 按**状态**」随机抽取的台词 ——
+> 目前覆盖**休息处顶部提示语**与**多人催促（ping）气泡**。
 >
-> 目前覆盖两个场景：**火堆（休息处）顶部提示语**、**多人催促（ping）头顶气泡** ——
-> 同一个火堆，铁甲战士低血时会嘴硬、静默猎手永远只有省略号；同一次 ping，等得越久语气越难看。
+> 本项目由 **DeepSeek Harness** 完成整体开发（代码、文档、台词），本人负责提需求、台词润色与测试反馈。
 
 <div align="center">
 
-*Slay the Spire 2 mod — random character-flavored lines for fixed UI text.*
+*Random, character-flavored lines for Slay the Spire 2's fixed UI text — a cosmetic mod.*
 
 </div>
 
@@ -23,21 +23,21 @@
 
 | | |
 |---|---|
-| 🔥 **火堆台词** | 14 个条件：低血 / 南瓜蜡烛 / 壶铃 ×2 / 10 种火堆遗物。遗物拿得越多，越容易说出遗物相关的台词（占比 25% → 80%） |
+| 🔥 **休息处台词** | 14 个条件：低血 / 南瓜蜡烛 / 壶铃 ×2 / 10 种火堆遗物。遗物拿得越多，越容易说出遗物相关的台词（占比 25% → 80%） |
 | 📣 **多人催促（ping）** | 三档语气：正常 → **更急**（等满 1 分钟）→ **更凶**（等满 5 分钟）；每次按都会换一句，连按不重复 |
-| 🤝 **两端一致，且不绑架队友** | 两个装了 mod 的人看到的是**同一句**；**没装的人完全不受影响** —— 照样联机、显示游戏原话 |
-| ✍️ **台词可以就地改** | 改 `lines.json` → 重进一次场景即生效，**不用重编译、不用重启游戏** |
+| 🤝 **多人同步，且不绑架队友** | 装了 mod 的人看到**同一句**；**没装的人完全不受影响** —— 照样联机、显示游戏原话 |
+| ✍️ **可本地修改** | 改 `lines.json` → 重进一次场景即生效，**不用重编译、不用重启游戏** |
 | 🧩 **数据驱动** | 代码只管"什么时候该说什么"，文案全在 JSON；加角色 / 加场景都不用动 C# |
 | 🛡️ **优雅降级** | 反射失败、JSON 写错、文件读不到 —— 一律**保持游戏原版文案**，不崩、不刷屏 |
-| 👻 **纯外观** | 清单里 `affects_gameplay: false`：不改数值、不改判定、不碰同步状态（发牌用的 RNG 一概不抽） |
+| 👻 **不改变玩法** | 清单里 `affects_gameplay: false`：不改数值、不改判定、不碰同步状态（发牌用的 RNG 一概不抽） |
 
 ## 安装
 
 1. 拿一个发布包（二选一）：
-   - **稳定版**：到 [Releases](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases) 下载 `MoreCharacterLines_v*.zip`；
+   - **已发布版本**：到 [Releases](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases) 下载 `MoreCharacterLines_v*.zip`（发版节奏由作者定）；
    - **最新构建**（每次 push 自动出）：到 [Actions](https://github.com/moonEEVEEXwX/MoreCharacterLines/actions/workflows/ci.yml)
      选最新一次成功的运行，页面底部 **Artifacts** 里下载 `MoreCharacterLines-r*`，同样解压即装。
-2. 解压得到 `MoreCharacterLines` 文件夹，整个丢进游戏目录：
+2. 解压得到 `MoreCharacterLines` 文件夹，整个丢进 `游戏目录\mods\`：
 
    ```
    Slay the Spire 2/
@@ -50,11 +50,11 @@
          └─ README.md / DESIGN.md
    ```
 
-3. 启动游戏（需要 **v0.111.0** 及以上，清单里已声明 `min_game_version`）。
+3. 启动游戏。**只适配 public-beta 分支的 `v0.111.0`**（作者正在玩的版本）；正式分支 `v0.107.0` 更旧，**没测试过**。
 
 卸载 = 删掉这个文件夹；想临时关掉，把 `MoreCharacterLines.json` 改个名即可。
 
-## 上手：改台词（30 秒）
+## 本地改台词
 
 用记事本 / VS Code 打开 `mods/MoreCharacterLines/lines.json`，照着已有结构加句子：
 
@@ -62,7 +62,7 @@
 "rest_site": {
   "IRONCLAD": {
     "normal": ["火。很好。", "稍作调整。继续杀戮。"],
-    "low_hp": ["致命伤算什么。"]                 // 血量 ≤ 25% 时说的
+    "low_hp": ["致命伤算什么。"]                 // 当血量 ≤ 25% 时出现。
   },
   "DEFAULT": { "normal": ["我该做什么呢……"] }    // 没写专属台词的角色走这里（ping 没有通用池）
 }
@@ -88,9 +88,11 @@
 | `NECROBINDER` | 亡灵契约师 |
 | `DEFAULT` | 通用兜底（**火堆有，ping 没有**） |
 
-mod 角色直接用它的角色 ID 当键即可（例如 `"WATCHER"`），**不用改代码**。
+mod 角色直接用它的角色 ID 当键（例如 `"WATCHER"`），**不用改代码**。
 
 ### 条件一览
+
+#### 休息处
 
 | 条件名 | 触发时机 | 数据来源 |
 |---|---|---|
@@ -99,6 +101,11 @@ mod 角色直接用它的角色 ID 当键即可（例如 `"WATCHER"`），**不�
 | `girya_maxed` | 壶铃已练满 | `Girya.TimesLifted`，**只播一次** |
 | `girya_progress` | 壶铃还没练满 | 同上 |
 | `relic_*` | 拥有对应火堆遗物 | 10 个：铲子 / 切肉刀 / 微型帐篷 / 捕梦网 / 小邮箱 / 皇家枕头 / 佩尔增生组织 / 石炉加湿器 / 古茶具（真·假互斥） |
+
+#### 多人催促（ping）
+
+| 条件名 | 触发时机 | 数据来源 |
+|---|---|---|
 | `wait_urgent` | ping：≥50% 玩家已结束回合、其余人还在打，且等超过 60 秒 | 回合号 + 游戏自己的"已结束回合"集合 |
 | `wait_angry` | 同上，等超过 300 秒 | 同上 |
 
@@ -114,7 +121,10 @@ mod 角色直接用它的角色 ID 当键即可（例如 `"WATCHER"`），**不�
 
 ## 兼容性与边界
 
-- **游戏版本**：`v0.111.0`（清单里声明了 `min_game_version`，低于它游戏会拒绝加载）。
+- **游戏版本**：只适配 **public-beta 分支 `v0.111.0`**（作者在玩的版本）。正式分支 `v0.107.0` 更旧，**未测试**。
+  清单里声明了 `min_game_version = v0.111.0`，低于它的版本游戏会直接拒绝加载。
+  游戏仍在 EA、更新频繁，下个版本预计有较大改动（新角色、新二层等）—— **接口一变本 mod 可能失效；
+  我们不承诺兼容更高版本**，游戏更新后需要跟着改（所以对不上版本时，宁可不加载，也别崩）。
 - **多人游戏**：
   - ping：两端都装 mod → 显示同一句；只有一端装 → 对方显示游戏原话，**联机完全不受影响**；
   - 火堆：取「本地玩家」的角色，两台机器看到的可能不同（纯外观，不影响任何判定）。
@@ -152,13 +162,12 @@ dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreChar
 
 **Actions 会自己编译**（[`ci.yml`](.github/workflows/ci.yml) → [`.github/actions/build-mod`](.github/actions/build-mod/action.yml)）：
 
-| 时机 | 会做什么 |
-|---|---|
-| 每次 `push` / PR | 台词闸门 + `.ps1` BOM 闸门 + 清单检查，然后**编译 + 打包 PCK + 组装 zip**，把 `MoreCharacterLines-r<运行号>.zip` 传成 **Artifact**（运行页面底部可下载，解压即装）—— 小改动不用发版就能拿到最新构建 |
-| 打 `v*` tag | 拉 [`release.yml`](.github/workflows/release.yml)：同样编译打包 → 建 **GitHub Release** 并挂上 zip（附自动生成的更新说明）。tag 名与 `mod_manifest.json` 的 `version` 不一致会**直接失败**，避免发错版本号 |
+- 每次 `push` / PR → 编译 + 打包，运行页面底部 **Artifacts** 里可以下 `MoreCharacterLines-r*.zip`（解压即装，
+  小改动不用发版也能拿到最新构建）；
+- 打 `v*` tag → 走同一条链再建 **GitHub Release**（tag 名要和 `mod_manifest.json` 的 `version` 一致，否则直接失败）；
+- 什么时候发版由作者决定，push 只会出 artifact、不会公开发版。
 
-**公共 runner 上没有游戏本体，怎么编译的？** 本地开发引用游戏目录里的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll`，
-但这些文件有版权、不能进公开仓库。CI 上换成 NuGet 上的引用程序集：
+游戏本体的 `sts2.dll` / `GodotSharp.dll` / `0Harmony.dll` 有版权、不能进公开仓库，所以 CI 上改用 NuGet 上的引用程序集：
 
 - [`FuYnAloft.Sts2.References`](https://www.nuget.org/packages/FuYnAloft.Sts2.References) —— 社区维护的 StS2 引用程序集，
   用 Refasmer **剥掉了全部 IL、只留元数据**（不含任何可运行的游戏代码），版本号跟着游戏版本走（我们用 `0.111.0-beta`）；
@@ -173,7 +182,7 @@ dotnet build MoreCharacterLines.csproj -c Release -p:UseSts2NuGetRefs=true
 > 已验证：用 NuGet 引用程序集编译出的 DLL，预检 **84 项断言全过**，与游戏本体引用编译的版本行为一致
 > （两者只有 AssemblyRef 顺序不同导致的字节差异；产物里**不含**任何引用包内容）。
 
-工程约定（都是踩过坑的）：
+工程约定：
 
 - `.ps1` 必须存成 **UTF-8 with BOM** —— 否则 Windows PowerShell 5.1 按 GBK 读会直接语法错误；
   丢了就跑 `fix-encoding.ps1`（递归扫全仓库）。**用编辑器改完 `.ps1` 请顺手跑一次**（有些编辑器会吃掉 BOM）。
@@ -194,7 +203,7 @@ dotnet build MoreCharacterLines.csproj -c Release -p:UseSts2NuGetRefs=true
 - **许可**：[GPL-3.0](LICENSE)。
 - **作者 / 维护**：[@moonEEVEEXwX](https://github.com/moonEEVEEXwX)。
 - **代码与文档是怎么来的**：这是一个 **vibecoding 兴趣项目** —— 代码、文档与台词由
-  **DeepSeek Harness（DSH，本会话使用的 agent 工具）** 与作者协作产出；
+  **DeepSeek Harness**（本项目使用的开发 agent 工具）与作者协作产出；
   仓库里的提交者署名 `Dsh (vibecoding)` 指的就是这个工具，不是真人。
 - **第三方**：Godot / .NET / Harmony 等组件说明见 [`THIRD_PARTY.md`](THIRD_PARTY.md)；
   台词口吻参考了游戏内本地化文本（仅作风格参考，不复制原文）。
