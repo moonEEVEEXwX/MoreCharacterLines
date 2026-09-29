@@ -1,5 +1,6 @@
 # 更多角色台词 (MoreCharacterLines)
 
+[![Release](https://img.shields.io/github/v/release/moonEEVEEXwX/MoreCharacterLines?label=release&color=green)](https://github.com/moonEEVEEXwX/MoreCharacterLines/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Game](https://img.shields.io/badge/Slay%20the%20Spire%202-v0.111.0-orange.svg)](#兼容性与边界)
 [![Mod type](https://img.shields.io/badge/mod-pure%20cosmetic-lightgrey.svg)](#兼容性与边界)

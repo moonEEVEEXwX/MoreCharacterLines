@@ -600,7 +600,7 @@ girya_progress  ← 还没练满时的鼓励
 | ping 场景 | ✅ 已接（`ScenePing.cs`）：入口 `FlavorSynchronizer.CreateEndTurnPingDialogueIfNecessary`；两端一致 + 死人保持原版 + 三档语气（§2 / §4）。**只剩多人联机实测** |
 | 其他场景（事件/宝箱/商店/战斗开始） | ⬜ 未接，机制现成（§11 两步流程） |
 | git | ✅ **已开源**：<https://github.com/moonEEVEEXwX/MoreCharacterLines>（公开，GPL-3.0）。提交署名统一 `Dsh (vibecoding) <dsh@example.com>`（**Dsh = DeepSeek Harness，即本 agent 工具，不是人名**；33 个历史提交已重写，文件内容零改动）；`mod_manifest.json` 的 `author` 用 GitHub 名 `moonEEVEEXwX`；**push 两种都行**：玩家终端直接 `git push`；或让 AI 推（沙箱默认会拦 `sh.exe` → 需要一次性放权授权，放行后凭据可复用） |
-| 发版流水线 | ✅ 已接（选项 C，见 §9）：`build.ps1` 每次构建同步 `release\`（dll/pck/`ARTIFACTS.txt`）→ 提交 → 打 `v*` tag → `release.yml` 自动组装 zip 并建 Release。`ci.yml` 每次 push 会核对指纹 + 演练打包 |
+| 发版流水线 | ✅ 已接并跑通（选项 C，见 §9）：`build.ps1` 每次构建同步 `release\`（dll/pck/`ARTIFACTS.txt`）→ 提交 → 打 `v*` tag → `release.yml` 自动组装 zip 并建 Release。`ci.yml` 每次 push 会核对指纹 + 演练打包。<br>**`v0.1.0` 已发布**：<https://github.com/moonEEVEEXwX/MoreCharacterLines/releases/tag/v0.1.0>（附件 `MoreCharacterLines_v0.1.0.zip`，83.9 KB）；Actions 的 `CI` 与 `Release` 两次运行都是 success |
 
 ### 关键路径
 
@@ -658,13 +658,15 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 > - 玩家随时可以自己 `git push`（走同一个 GCM 凭据），或收回这条授权。
 ### 下一个任务（玩家指定顺序）
 
-> 改名（`MoreCharacterLines`）和 ping 接入都已经做完。下一步见下。
+> 改名（`MoreCharacterLines`）和 ping 接入都已经做完，`v0.1.0` 也自动发出去了。下一步见下。
 
-1. **ping 多人联机实测**（需要两台机器 / 两个客户端）：
+1. **ping 多人联机实测**（需要两台机器 / 两个客户端）—— **唯一的 P0 遗留**：
    - 把 `游戏目录\mods\MoreCharacterLines\lines.json` 里的 `_ping.urgentAfterSeconds` /
      `angryAfterSeconds` 临时改成 `10` / `20`，就不用真等 1 分钟 / 5 分钟；
    - 验四件事：① 结束回合后按 Ping 有气泡且是 mod 台词；② 两台机器（都装了 mod）看到**同一句**；
      ③ 只有一台装 mod 时，另一台显示游戏原话、联机正常；④ 死人按 Ping 时仍然只有 `……`；
+   - 想连按不重样也一起看：连按 5 次应该换 5 句（`_ping.perPingVariety` 默认 `true`；
+     设 `false` 则同回合同档位固定一句、两端 100% 一致）；
    - 日志里搜 `[MoreCharacterLines] 催促台词（档位 N）` 可以看到档位与抽中的句子。
 2. **更多场景**：同上，先找"文案被设置的地方"，再写 `SceneXxx.cs`（流程见 §11）。
 3. 玩家说"还有很多要求"，先问清楚再动手。
