@@ -434,7 +434,7 @@ girya_progress  ← 还没练满时的鼓励
 
 ## 7. 测试方针
 
-不开游戏也能验大半，靠 `_tools\preflight`（加载**真实的 sts2.dll** + 已安装的 mod DLL）：
+不开游戏也能验大半，靠仓库自带的 `tools\preflight`（加载**真实的 sts2.dll** + 已安装的 mod DLL）：
 
 - Harmony 补丁是否挂上 `NRestSiteRoom._Ready`
 - 反射目标是否存在：私有字段 `_runState`、私有属性 `Header`、`CharacterModel.IsLowHealth`
@@ -495,7 +495,7 @@ girya_progress  ← 还没练满时的鼓励
 
 - [ ] 游戏内配置界面（ModConfig）替代手改 JSON
 - [ ] 装 .NET 9 SDK 后把构建切回标准 `dotnet build`（现在自动回退 Roslyn csc）
-- [ ] 把 `_tools\preflight` 挪进仓库（现在在工作区，不在 git 里）
+- [x] ~~把 `_tools\preflight` 挪进仓库~~ → **已做**：工具在 `tools\preflight\`，自带 `build.ps1`（自动找游戏目录 + 用 SDK 的 csc 编译 + 补 runtimeconfig），clone 下来即可构建
 
 ---
 
@@ -600,7 +600,7 @@ girya_progress  ← 还没练满时的鼓励
 | 台词（源码，会被打包进 PCK） | `assets\MoreCharacterLines\lines.json` |
 | 台词（游戏里可就地改的那份） | `游戏目录\mods\MoreCharacterLines\lines.json` |
 | 构建 / 语法闸门 | `build.ps1` + `check_lines.py`（`fix-encoding.ps1` 修 BOM） |
-| 预检 | `D:\sts2modtest\_tools\preflight\bin\Preflight.dll` |
+| 预检 | `tools\preflight\bin\Preflight.dll`（构建：`tools\preflight\build.ps1`） |
 | IL 阅读器（查游戏逻辑） | `D:\sts2modtest\_tools\ildump\ildump\bin\Release\net8.0\ildump.exe` |
 | PCK 工具（list / cat / extract） | `D:\sts2modtest\_tools\pck_tool.py` |
 | 游戏本地化导出（考证口吻用） | `D:\sts2modtest\_ref\loc_zhs`、`_ref\loc_eng` |
@@ -614,8 +614,10 @@ cd D:\sts2modtest\MoreCharacterLines; powershell -ExecutionPolicy Bypass -File b
 # 只校验台词文件（少逗号会报行号）
 python check_lines.py assets\MoreCharacterLines\lines.json
 
-# 预检：加载真实 sts2.dll + 已安装的 mod DLL
-cd D:\sts2modtest\_tools\preflight\bin
+# 预检：先构建（clone 下来第一次要跑），再对着"已安装的那份"跑断言
+cd D:\sts2modtest\MoreCharacterLines
+powershell -ExecutionPolicy Bypass -File tools\preflight\build.ps1
+cd tools\preflight\bin
 dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreCharacterLines\MoreCharacterLines.dll"
 
 # 查游戏某方法的逻辑 / 找某个字符串在哪里被用
@@ -658,5 +660,5 @@ ildump.exe "<...>\sts2.dll" findcall "方法名"
 - **改 mod id（改名）时必须同步这些地方**，漏一处就静默失效或双份加载：
   `mod_manifest.json` 的 `id` + `pck_name`、`build.ps1` 的 `$modId`、`LineBank.cs` 的
   `res://<id>/lines.json` 与 `user://<id>`、`OneShot.cs` 的 `user://<id>`、
-  命名空间 / 程序集名 / 日志前缀、`assets\<id>\` 目录，以及仓库外的 `_tools\preflight\Preflight.cs`。
+  命名空间 / 程序集名 / 日志前缀、`assets\<id>\` 目录，以及 `tools\preflight\Preflight.cs`。
   **游戏里旧 id 的 mod 目录一定要删** —— 留着会同时加载两个 DLL，同一处文案被补丁挂两次。

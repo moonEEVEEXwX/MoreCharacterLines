@@ -272,6 +272,12 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ---
 
+> **改代码的人**：仓库自带预检工具（`tools\preflight`）—— 不用开游戏就能验补丁挂点、
+> 反射目标、抽取逻辑、ping 的规则。构建 + 运行：
+> `powershell -File tools\preflight\build.ps1` → `cd tools\preflight\bin` →
+> `dotnet Preflight.dll "<游戏>\data_sts2_windows_x86_64" "<游戏>\mods\MoreCharacterLines\MoreCharacterLines.dll"`
+
+---
 ## 6. git
 
 ```powershell
